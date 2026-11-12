@@ -2,16 +2,14 @@
 import { useState } from "react";
 import { TxButton } from "@/components/TxButton";
 import { GameScreen } from "@/components/game/GameScreen";
+import { DeckCarousel } from "@/components/game/DeckCarousel";
 import { A, ASSETS, fmtAmount, fmtUsd, parseAmount, tokenOf, type OracleJson } from "@/lib/contracts";
 import { useView } from "@/lib/useView";
 import { useWallet } from "@/lib/wallet";
 import { ONE_YOCTO, TGAS } from "@/lib/near";
 
-const STYLES = [
-  { name: "Guardian", note: "Safe. Small, steady rewards." },
-  { name: "Balanced", note: "A bit of both." },
-  { name: "Degen", note: "Risky. Bigger rewards, bigger swings." },
-];
+const QUICK = [["10", "50", "100", "500"], ["1", "5", "10", "25"]];
+const fmtMax = (asset: number, v: bigint) => (asset === 0 ? (Number(v) / 1e6).toString() : (Number(v) / 1e24).toString());
 
 export default function GetCoins() {
   const { accountId } = useWallet();
@@ -37,28 +35,29 @@ export default function GetCoins() {
   return (
     <GameScreen title="GET COINS">
       <section className="qm-card gs-card">
-        <h2>1. Free coins</h2>
+        <h2><span className="gs-step">1</span>Free coins</h2>
         <p>Grab free test coins to play with. You can claim again every 24 hours.</p>
-        <div className="gs-stat"><span>You have</span><b>{fmtUsd(BigInt(balUsd.data ?? 0))} tUSD · {fmtAmount(1, BigInt(balNear.data ?? 0))} tNEAR</b></div>
+        <div className="gs-wallet" aria-label="Your coins">
+          <span className="gs-coin usd"><i aria-hidden>$</i><b>{fmtUsd(BigInt(balUsd.data ?? 0))}</b><small>tUSD</small></span>
+          <span className="gs-coin near"><i aria-hidden>N</i><b>{fmtAmount(1, BigInt(balNear.data ?? 0))}</b><small>tNEAR</small></span>
+        </div>
         <TxButton label={waitH > 0 ? `CLAIM IN ${Math.ceil(waitH)}H` : "CLAIM FREE COINS"} disabled={waitH > 0} onConfirmed={refetch}
           request={[{ receiverId: A.tusd, methodName: "claim", gas: TGAS(30) }, { receiverId: A.tnear, methodName: "claim", gas: TGAS(30) }]} />
         <p className="gs-note">You also need a tiny bit of test NEAR for network fees. Get it free at <a href="https://near-faucet.io/" target="_blank" rel="noreferrer">near-faucet.io</a>.</p>
       </section>
 
       <section className="qm-card gs-card">
-        <h2>2. Make your deck</h2>
+        <h2><span className="gs-step">2</span>Make your deck</h2>
         <p>Put coins in to get a deck. The deck keeps earning rewards while you play. You can cash out any time.</p>
-        <div className="gs-choices">
-          {STYLES.map((s, i) => (
-            <button key={s.name} className={`gs-choice ${tier === i ? "on" : ""}`} onClick={() => setTier(i)}>
-              {s.name} · about {yearly(i)} a year<small>{s.note}</small>
-            </button>
-          ))}
+        <DeckCarousel tier={tier} onTier={setTier} yearly={yearly} />
+        <div className="gs-seg" role="tablist" aria-label="Which coin">
+          {ASSETS.map((a, i) => <button key={a} role="tab" aria-selected={asset === i} className={asset === i ? "on" : ""} onClick={() => { setAsset(i); setAmt(QUICK[i][1]); }}>{a}</button>)}
         </div>
-        <div className="gs-choices two">
-          {ASSETS.map((a, i) => <button key={a} className={`gs-choice ${asset === i ? "on" : ""}`} onClick={() => setAsset(i)}>{a}</button>)}
+        <input className="gs-amount" value={amt} onChange={(e) => setAmt(e.target.value)} inputMode="decimal" aria-label="Amount" />
+        <div className="gs-quick">
+          {QUICK[asset].map((v) => <button key={v} className={amt === v ? "on" : ""} onClick={() => setAmt(v)}>{v}</button>)}
+          <button onClick={() => setAmt(fmtMax(asset, BigInt((asset === 0 ? balUsd.data : balNear.data) ?? 0)))}>MAX</button>
         </div>
-        <input value={amt} onChange={(e) => setAmt(e.target.value)} inputMode="decimal" aria-label="Amount" />
         <p className="gs-note">Minimum: 10 tUSD{asset === 1 && amount > 0n ? ` · your tNEAR is worth about ${fmtUsd(worth)} tUSD` : ""}.</p>
         <TxButton label="MAKE MY DECK" disabled={amount === 0n || worth < 10_000_000n} onConfirmed={refetch}
           request={{ receiverId: token, methodName: "ft_transfer_call", gas: TGAS(100), deposit: ONE_YOCTO,

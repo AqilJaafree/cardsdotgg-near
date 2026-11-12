@@ -1,0 +1,20 @@
+# systemd user service for the match resolver. Installed by keeper/deploy/install-resolver.sh, which fills in the
+# @REPO@ and @NODE@ placeholders. Secrets stay in the repo's .env.keeper (keeper key only, mode 600; the owner key is never loaded here), never in this file.
+[Unit]
+Description=cardsdotgg match resolver (resolves matches after the seed block, closes stale challenges)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=@REPO@/keeper
+EnvironmentFile=@REPO@/.env.keeper
+ExecStart=@NODE@ --import tsx src/resolver.ts --watch
+Restart=always
+RestartSec=5
+# The resolver only needs the network and to read the repo.
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target

@@ -1,147 +1,122 @@
-// One-shot keeper: reads Monad mainnet rates, writes shared/rate-sources.json and, unless --dry, calls setRates.
-// Env: KEEPER_PRIVATE_KEY, MONAD_TESTNET_RPC_URL, MONAD_MAINNET_RPC_URL (needs historical state).
+// One-shot keeper: reads Rhea pools on NEAR mainnet, writes shared/rate-sources.json and shared/liquidity-source.json,
+// and unless --dry calls set_rates and set_near_price on the testnet game contract.
+// Env: KEEPER_ACCOUNT_ID, KEEPER_PRIVATE_KEY (ed25519:...), optional NEAR_MAINNET_RPC, NEAR_TESTNET_RPC.
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
-import { createPublicClient, createWalletClient, http, parseAbi, defineChain, type Address } from "viem";
-import { privateKeyToAccount } from "viem/accounts";
-import { GOLD_POOL, GOLD_POOL_SOURCE, VOLUME_API } from "./sources.js";
-import { POSITIONS, readPosition } from "./positions.js";
-import { assertSaneGold, clampBps, priceFromSqrt } from "./computeRates.js";
+import { aprBps, assertSaneNear, clampBps, nearPriceFromReserves } from "./computeRates.js";
+import { NEAR_MAINNET_RPC, NEAR_REFERENCE_POOL, RHEA_DEX_CONTRACT, RHEA_POOL_SEARCH, RHEA_POOL_URL, TIER_POOLS, WNEAR } from "./sources.js";
 
 const root = new URL("../../", import.meta.url);
 const dry = process.argv.includes("--dry");
+const mainnetRpc = process.env.NEAR_MAINNET_RPC || NEAR_MAINNET_RPC;
 
-const mainnet = createPublicClient({
-  transport: http(process.env.MONAD_MAINNET_RPC_URL || "https://rpc-mainnet.monadinfra.com"),
-});
+type Row = { id: string; pool_kind: string; token_account_ids: string[]; token_symbols: string[]; amounts: string[]; tvl: string; volume_24h: string; fee_volume_24h: string; apy: string; total_fee: string };
 
-const oracleAbi = parseAbi(["function setRates(uint16,uint16,uint16,uint64)", "function setGoldPrice(uint256)"]);
-const v3Abi = parseAbi([
-  "function slot0() view returns (uint160,int24,uint16,uint16,uint16,uint32,bool)",
-  "function token0() view returns (address)",
-  "function token1() view returns (address)",
-  "function liquidity() view returns (uint128)",
-  "function fee() view returns (uint24)",
-  "function factory() view returns (address)",
-]);
-const erc20Abi = parseAbi([
-  "function symbol() view returns (string)",
-  "function decimals() view returns (uint8)",
-  "function balanceOf(address) view returns (uint256)",
-]);
+async function json(url: string) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`);
+  return r.json();
+}
 
-async function readGoldPool(blockNumber: bigint, readAt: string) {
-  const v3 = <T extends "slot0" | "token0" | "token1" | "liquidity" | "fee" | "factory">(functionName: T) =>
-    mainnet.readContract({ address: GOLD_POOL, abi: v3Abi, functionName, blockNumber } as never) as Promise<any>;
-  const [slot0, token0, token1, liquidity, fee, factory] = await Promise.all([
-    v3("slot0"), v3("token0"), v3("token1"), v3("liquidity"), v3("fee"), v3("factory"),
-  ]);
-  const info = async (address: Address) => {
-    const read = (functionName: "symbol" | "decimals") =>
-      mainnet.readContract({ address, abi: erc20Abi, functionName, blockNumber } as never) as Promise<any>;
-    const balance = await mainnet.readContract({ address, abi: erc20Abi, functionName: "balanceOf", args: [GOLD_POOL], blockNumber });
-    return { address, symbol: (await read("symbol")) as string, decimals: Number(await read("decimals")), balance };
-  };
-  const [t0, t1] = await Promise.all([info(token0), info(token1)]);
-  const baseIsToken0 = t0.symbol === "XAUt0";
-  if (!baseIsToken0 && t1.symbol !== "XAUt0") throw new Error("gold pool does not hold XAUt0");
-  const [gold, quote] = baseIsToken0 ? [t0, t1] : [t1, t0];
-  if (quote.symbol !== "USDT0" || quote.decimals !== 6) throw new Error(`unexpected quote token ${quote.symbol}`);
-  const price = priceFromSqrt(slot0[0], baseIsToken0, gold.decimals);
-  assertSaneGold(price);
-  const goldValue = (gold.balance * price) / 10n ** BigInt(gold.decimals);
-  let volume24hUsd: string | null = null;
-  try {
-    const r = await fetch(VOLUME_API);
-    volume24hUsd = (await r.json()).data.attributes.volume_usd.h24 ?? null;
-  } catch {
-    console.warn("24h volume unavailable");
-  }
-  return {
-    live: true,
-    source: GOLD_POOL_SOURCE,
-    sourceContract: GOLD_POOL,
-    factory,
-    goldToken: gold.address,
-    quoteToken: quote.address,
-    usdPerGold1e6: price.toString(),
-    goldReserve: gold.balance.toString(),
-    goldDecimals: gold.decimals,
-    quoteReserve: quote.balance.toString(),
-    quoteDecimals: quote.decimals,
-    reserveValueUsd1e6: (goldValue + quote.balance).toString(),
-    activeLiquidity: liquidity.toString(),
-    feePips: Number(fee),
-    volume24hUsd,
-    volumeSource: volume24hUsd === null ? null : VOLUME_API,
-    note: "Read on chain from a thin pool. USDT0 is treated as 1 USD. The testnet pool opens from this data with test tokens; it does not hold or track real assets.",
-    readAt,
-    mainnetBlock: blockNumber.toString(),
-  };
+async function rpc(method: string, params: unknown, url = mainnetRpc) {
+  const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) });
+  const body = await r.json();
+  if (body.error) throw new Error(`${method}: ${JSON.stringify(body.error)}`);
+  return body.result;
+}
+
+/** View call on the Rhea DEX, used to check the indexer's reserves against the chain. */
+async function getPool(poolId: string) {
+  const args = Buffer.from(JSON.stringify({ pool_id: Number(poolId) })).toString("base64");
+  const res = await rpc("query", { request_type: "call_function", finality: "final", account_id: RHEA_DEX_CONTRACT, method_name: "get_pool", args_base64: args });
+  return JSON.parse(Buffer.from(res.result).toString()) as { token_account_ids: string[]; amounts: string[]; pool_kind: string };
 }
 
 async function main() {
-  const head = await mainnet.getBlock();
-  if ((await mainnet.getChainId()) !== 143) throw new Error("mainnet RPC is not chain 143");
+  const status = await rpc("status", []);
+  if (status.chain_id !== "mainnet") throw new Error("mainnet RPC is not NEAR mainnet");
+  const block = await rpc("block", { finality: "final" });
   const readAt = new Date().toISOString();
+  const blockHeight = String(block.header.height);
+
+  const ids = [...TIER_POOLS.map((t) => t.poolId), NEAR_REFERENCE_POOL];
+  const search = await json(`${RHEA_POOL_SEARCH}?pool_id_list=${[...new Set(ids)].join(",")}`);
+  const rows = new Map<string, Row>((search.data.list as Row[]).map((r) => [r.id, r]));
 
   const entries = [];
-  for (const pos of POSITIONS) {
-    const r = await readPosition(mainnet as never, pos, head);
+  for (const t of TIER_POOLS) {
+    const row = rows.get(t.poolId);
+    if (!row) throw new Error(`Rhea pool ${t.poolId} missing from the indexer`);
+    const chain = await getPool(t.poolId);
+    if (chain.token_account_ids.join() !== row.token_account_ids.join()) throw new Error(`pool ${t.poolId}: indexer and chain disagree on tokens`);
+    const raw = aprBps(row);
+    const label = row.token_symbols.join("/");
     entries.push({
-      tier: pos.tier,
-      bps: clampBps(r.bps),
-      rawBps: r.bps,
+      tier: t.tier,
+      bps: clampBps(raw),
+      rawBps: raw,
       live: true,
-      source: `Uniswap V${r.version} ${r.label} position #${r.positionId}`,
-      sourceContract: r.pool,
-      sourceUrl: r.positionUrl,
-      note: "Estimated fees this position's price range earned over the trailing window, annualized from sampled pool fee growth. Ignores impermanent loss, and is not what this position has itself earned so far. Capped at 50%.",
-      ...r,
+      source: `Rhea ${row.pool_kind === "SIMPLE_POOL" ? "pool" : "stable pool"} #${row.id} ${label}`,
+      sourceContract: RHEA_DEX_CONTRACT,
+      sourceUrl: RHEA_POOL_URL(row.id),
+      note: "Rhea's reported APY for the whole pool, from its 24h fee volume and TVL. It is the pool's rate, not what any one position earned, and ignores impermanent loss. Capped at 50%.",
+      label,
+      poolId: row.id,
+      poolKind: row.pool_kind,
+      feeFraction: row.total_fee,
+      tvlUsd: Number(Number(row.tvl).toFixed(2)),
+      volume24hUsd: Number(Number(row.volume_24h).toFixed(2)),
+      feeVolume24hUsd: Number(Number(row.fee_volume_24h).toFixed(2)),
       readAt,
-      mainnetBlock: head.number.toString(),
+      nearBlock: blockHeight,
     });
-    console.log(`tier ${pos.tier}: ${r.bps} bps, ${r.label} v${r.version} #${r.positionId}, inRange=${r.inRange}, ${r.intervalsInRange}/${r.samples} intervals, ${r.windowDays}d, value $${r.positionValueUsd}, owner ${r.owner}`);
+    console.log(`tier ${t.tier}: ${raw} bps, Rhea #${row.id} ${label}, tvl $${Math.round(Number(row.tvl))}, vol24h $${Math.round(Number(row.volume_24h))}`);
   }
-
   writeFileSync(new URL("shared/rate-sources.json", root), JSON.stringify(entries, null, 2) + "\n");
-  const goldPool = await readGoldPool(head.number, readAt);
-  writeFileSync(new URL("shared/liquidity-source.json", root), JSON.stringify(goldPool, null, 2) + "\n");
-  console.log(`gold: ${Number(goldPool.usdPerGold1e6) / 1e6} USD, pool value ${Number(goldPool.reserveValueUsd1e6) / 1e6} USD, 24h volume ${goldPool.volume24hUsd}`);
+
+  const ref = rows.get(NEAR_REFERENCE_POOL)!;
+  const nearIdx = ref.token_account_ids.indexOf(WNEAR);
+  if (nearIdx < 0 || ref.token_account_ids.length !== 2) throw new Error("reference pool must be USDC/wNEAR");
+  const usdcIdx = 1 - nearIdx;
+  if (ref.token_symbols[usdcIdx] !== "USDC") throw new Error(`unexpected quote token ${ref.token_symbols[usdcIdx]}`);
+  const price = nearPriceFromReserves(BigInt(ref.amounts[usdcIdx]), BigInt(ref.amounts[nearIdx]));
+  assertSaneNear(price);
+  const near = {
+    live: true,
+    source: `Rhea pool #${ref.id} USDC/wNEAR, NEAR mainnet`,
+    sourceContract: RHEA_DEX_CONTRACT,
+    sourceUrl: RHEA_POOL_URL(ref.id),
+    poolId: ref.id,
+    nearToken: WNEAR,
+    quoteToken: ref.token_account_ids[usdcIdx],
+    usdPerNear1e6: price.toString(),
+    nearReserve: ref.amounts[nearIdx],
+    nearDecimals: 24,
+    quoteReserve: ref.amounts[usdcIdx],
+    quoteDecimals: 6,
+    reserveValueUsd1e6: (BigInt(ref.amounts[usdcIdx]) * 2n).toString(),
+    tvlUsd: Number(Number(ref.tvl).toFixed(2)),
+    volume24hUsd: Number(Number(ref.volume_24h).toFixed(2)),
+    feeFraction: ref.total_fee,
+    note: "Read from Rhea on NEAR mainnet. USDC is treated as 1 USD. The testnet pool opens from this price and depth with test tokens; it does not hold or track real assets.",
+    readAt,
+    nearBlock: blockHeight,
+  };
+  writeFileSync(new URL("shared/liquidity-source.json", root), JSON.stringify(near, null, 2) + "\n");
+  console.log(`NEAR: ${Number(price) / 1e6} USD, reference pool value ${Number(near.reserveValueUsd1e6) / 1e6} USD, 24h volume ${near.volume24hUsd}`);
   if (dry) return console.log("dry run: no transaction sent");
 
   const addrFile = new URL("shared/addresses.json", root);
   if (!existsSync(addrFile)) throw new Error("shared/addresses.json is missing, deploy first");
-  const addresses = JSON.parse(readFileSync(addrFile, "utf8")) as { rateOracle: Address };
-  const key = process.env.KEEPER_PRIVATE_KEY;
-  if (!key) throw new Error("KEEPER_PRIVATE_KEY is not set");
-  const rpc = process.env.MONAD_TESTNET_RPC_URL || "https://testnet-rpc.monad.xyz";
-  const chain = defineChain({
-    id: 10143,
-    name: "Monad Testnet",
-    nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 },
-    rpcUrls: { default: { http: [rpc] } },
-  });
-  const account = privateKeyToAccount((key.startsWith("0x") ? key : `0x${key}`) as `0x${string}`);
-  const wallet = createWalletClient({ account, chain, transport: http(rpc) });
-  const testnet = createPublicClient({ chain, transport: http(rpc) });
-  const hash = await wallet.writeContract({
-    address: addresses.rateOracle,
-    abi: oracleAbi,
-    functionName: "setRates",
-    args: [entries[0].bps, entries[1].bps, entries[2].bps, head.number],
-  });
-  const receipt = await testnet.waitForTransactionReceipt({ hash });
-  console.log(`setRates ${receipt.status}: ${hash}`);
-  if (receipt.status !== "success") process.exit(1);
-  const goldHash = await wallet.writeContract({
-    address: addresses.rateOracle,
-    abi: oracleAbi,
-    functionName: "setGoldPrice",
-    args: [BigInt(goldPool.usdPerGold1e6)],
-  });
-  const goldReceipt = await testnet.waitForTransactionReceipt({ hash: goldHash });
-  console.log(`setGoldPrice ${goldReceipt.status}: ${goldHash}`);
-  if (goldReceipt.status !== "success") process.exit(1);
+  const addresses = JSON.parse(readFileSync(addrFile, "utf8")) as { game: string; rpc: string };
+  const accountId = process.env.KEEPER_ACCOUNT_ID, key = process.env.KEEPER_PRIVATE_KEY;
+  if (!accountId || !key) throw new Error("KEEPER_ACCOUNT_ID and KEEPER_PRIVATE_KEY must be set");
+  const { Account } = await import("near-api-js");
+  const account = new Account(accountId, process.env.NEAR_TESTNET_RPC || addresses.rpc, key as `ed25519:${string}`);
+  const gas = 30n * 10n ** 12n;
+  await account.callFunction({ contractId: addresses.game, methodName: "set_rates", args: { guardian_bps: entries[0].bps, balanced_bps: entries[1].bps, degen_bps: entries[2].bps, source_block: Number(blockHeight) }, gas });
+  console.log(`set_rates ok: ${entries.map((e) => e.bps).join(", ")} bps`);
+  await account.callFunction({ contractId: addresses.game, methodName: "set_near_price", args: { usd_per_near_1e6: price.toString() }, gas });
+  console.log(`set_near_price ok: ${Number(price) / 1e6} USD`);
 }
 
 main().catch((e) => {

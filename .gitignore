@@ -8,3 +8,7 @@ contracts/out/
 contracts/cache/
 contracts/broadcast/
 .DS_Store
+near/target/
+app/lib/shared/
+keeper/.deploy-keys.json
+.env.keeper

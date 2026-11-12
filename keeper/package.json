@@ -4,13 +4,20 @@
   "type": "module",
   "scripts": {
     "dry": "tsx src/run.ts --dry",
-    "run-once": "tsx src/run.ts"
+    "run-once": "tsx src/run.ts",
+    "deploy-testnet": "tsx src/deploy.ts",
+    "e2e": "tsx src/e2e.ts",
+    "setup-keeper": "tsx src/setup-keeper.ts",
+    "resolve": "tsx src/resolver.ts",
+    "resolve:watch": "tsx src/resolver.ts --watch"
   },
   "dependencies": {
-    "viem": "2.21.54"
+    "near-api-js": "7.5.3"
   },
   "devDependencies": {
+    "@types/node": "20.17.6",
     "tsx": "4.19.2",
-    "typescript": "5.7.2"
+    "typescript": "5.7.2",
+    "binaryen": "123.0.0"
   }
 }

@@ -1,76 +1,80 @@
 "use client";
 import Link from "next/link";
 import { useState } from "react";
-import { useAccount, useBlockNumber, useReadContract, useReadContracts } from "wagmi";
-import { isAddress, zeroAddress } from "viem";
 import { TxButton } from "@/components/TxButton";
-import { Gate } from "@/components/NotDeployed";
-import { abis, ad, fmtUsd, STATUS, TIERS } from "@/lib/contracts";
+import { GameScreen } from "@/components/game/GameScreen";
+import { A, fmtUsd, TIERS, type MatchJson } from "@/lib/contracts";
 import { useDecks } from "@/lib/useDecks";
+import { useBlockHeight, useView } from "@/lib/useView";
+import { useWallet } from "@/lib/wallet";
+import { TGAS } from "@/lib/near";
 
-function MatchRow({ id, m, seedBlock, myDecks, refetch }: { id: bigint; m: any; seedBlock: bigint; myDecks: bigint[]; refetch: () => void }) {
-  const { address } = useAccount();
-  const { data: block } = useBlockNumber({ watch: true });
-  const [picked, setDeck] = useState<string>("");
+const ACCOUNT = /^[a-z0-9._-]{2,64}$/;
+const short = (a?: string | null) => (a ? (a.length > 18 ? `${a.slice(0, 8)}…${a.slice(-6)}` : a) : "anyone");
+
+function Row({ m, myDecks, refetch }: { m: MatchJson; myDecks: bigint[]; refetch: () => void }) {
+  const { accountId } = useWallet();
+  const block = useBlockHeight();
+  const [picked, setDeck] = useState("");
   const deck = picked || (myDecks[0] ? String(myDecks[0]) : "");
-  const st = Number(m.status);
-  const mine = address && m.playerA?.toLowerCase() === address.toLowerCase();
-  const staked = m.stakeA > 0n;
+  const mine = !!accountId && m.player_a === accountId;
+  const bet = BigInt(m.stake_a) > 0n;
+  const ready = !!block && block > BigInt(m.seed_block);
   return (
-    <div className="card">
-      <b>Match #{String(id)}</b> · {STATUS[st]} · deck A #{String(m.deckA)} · {staked ? `staked ${fmtUsd(m.stakeA)} tUSD` : "Rank-only"}
-      {st === 3 && <> · <Link href={`/match/${id}`}>Watch replay</Link></>}
-      {st === 0 && !mine && (
-        <div><select value={deck} onChange={(e) => setDeck(e.target.value)}>{myDecks.map((d) => <option key={String(d)} value={String(d)}>Deck #{String(d)}</option>)}</select>
-          <TxButton label="Accept" disabled={!deck} onConfirmed={refetch} request={{ address: ad("arena"), abi: abis.arena, functionName: "accept", args: [BigInt(id), BigInt(deck)] }} /></div>
+    <div className="gs-choice" style={{ cursor: "default" }}>
+      <span>{mine ? "Your challenge" : `${short(m.player_a)} wants to battle`}</span>
+      <small>{bet ? `Bet: ${fmtUsd(BigInt(m.stake_a))} tUSD each` : "Just for rank, no bet"}</small>
+      {m.status === 0 && !mine && myDecks.length > 0 && (
+        <>
+          <select value={deck} onChange={(e) => setDeck(e.target.value)}>{myDecks.map((d) => <option key={String(d)} value={String(d)}>Deck #{String(d)}</option>)}</select>
+          <TxButton label="ACCEPT" disabled={!deck} onConfirmed={refetch} request={{ receiverId: A.game, methodName: "accept", args: { match_id: m.id, deck_id: deck }, gas: TGAS(60) }} />
+        </>
       )}
-      {st === 0 && <TxButton label="Expire (after 1h)" onConfirmed={refetch} request={{ address: ad("arena"), abi: abis.arena, functionName: "expire", args: [id] }} />}
-      {st === 1 && (
-        <TxButton label={block && block > seedBlock ? "Resolve" : "Waiting for seed block…"} disabled={!block || block <= seedBlock} onConfirmed={refetch}
-          request={{ address: ad("arena"), abi: abis.arena, functionName: "resolve", args: [id] }} />
-      )}
-      {st === 1 && <small>prototype-only randomness. If the seed hash expired, Resolve re-arms; press it again.</small>}
+      {m.status === 0 && mine && <TxButton label="CANCEL" onConfirmed={refetch} request={{ receiverId: A.game, methodName: "cancel", args: { match_id: m.id }, gas: TGAS(40) }} />}
+      {m.status === 1 && <small>Battle starting… it plays itself in a few seconds.</small>}
+      {m.status === 1 && ready && <TxButton label="FIGHT!" onConfirmed={refetch} request={{ receiverId: A.game, methodName: "resolve", args: { match_id: m.id }, gas: TGAS(120) }} />}
+      {m.status === 3 && <Link className="gs-mini" href={`/match/${m.id}`}>WATCH REPLAY</Link>}
     </div>
   );
 }
 
-export default function Arena() {
-  const { address } = useAccount();
+export default function Friends() {
+  const { accountId } = useWallet();
   const { decks } = useDecks();
   const live = decks.filter((d) => !d.retired);
   const [deck, setDeck] = useState("");
-  const [opp, setOpp] = useState("");
-  const count = useReadContract({ address: ad("arena"), abi: abis.arena, functionName: "matchCount", query: { refetchInterval: 6000 } });
-  const n = Number(count.data ?? 0n);
-  const ids = Array.from({ length: Math.min(n, 8) }, (_, i) => BigInt(n - i));
-  const res = useReadContracts({
-    contracts: ids.flatMap((id) => [
-      { address: ad("arena"), abi: abis.arena, functionName: "getMatch", args: [id] },
-      { address: ad("arena"), abi: abis.arena, functionName: "seedBlockOf", args: [id] },
-    ]) as any, query: { enabled: n > 0, refetchInterval: 6000 },
-  });
-  const rows = ids.map((id, i) => ({ id, m: res.data?.[i * 2]?.result as any, sb: (res.data?.[i * 2 + 1]?.result as bigint) ?? 0n })).filter((r) => r.m);
-  const players = [...new Set(rows.flatMap((r) => [r.m.playerA, r.m.playerB]).filter((p: string) => p && p !== zeroAddress))] as `0x${string}`[];
-  const ratings = useReadContracts({ contracts: players.map((p) => ({ address: ad("arena"), abi: abis.arena, functionName: "ratingOf", args: [p] })) as any, query: { enabled: players.length > 0, refetchInterval: 10000 } });
+  const [friend, setFriend] = useState("");
+  const matches = useView<MatchJson[]>(A.game, "recent_matches", { limit: 8 }, { interval: 8000 });
   const sel = deck || (live[0] ? String(live[0].id) : "");
   const stake = live.find((d) => String(d.id) === sel);
-  const oppOk = opp === "" || isAddress(opp);
-  const refetch = () => { count.refetch(); res.refetch(); ratings.refetch(); };
+  const friendOk = friend === "" || ACCOUNT.test(friend);
+  const rows = (matches.data ?? []).filter((m) => m.status !== 4);
   return (
-    <Gate>
-      <div className="card">
-        <h2>Challenge</h2>
-        <select value={sel} onChange={(e) => setDeck(e.target.value)}>{live.map((d) => <option key={String(d.id)} value={String(d.id)}>{TIERS[d.tier]} Deck #{String(d.id)}</option>)}</select>{" "}
-        <input placeholder="opponent address (blank = open challenge)" value={opp} onChange={(e) => setOpp(e.target.value)} size={44} />
-        {stake && <p><small>{stake.available > 0n ? "Escrow covers the stake: staked match if both sides can cover theirs; otherwise Rank-only." : "Escrow is empty: this will be Rank-only."} Available {fmtUsd(stake.available)} tUSD.</small></p>}
-        <TxButton label="Create challenge" disabled={!address || !sel || !oppOk} onConfirmed={refetch}
-          request={{ address: ad("arena"), abi: abis.arena, functionName: "createChallenge", args: [BigInt(sel || 0), (opp || zeroAddress) as `0x${string}`] }} />
-      </div>
-      <h2>Recent matches</h2>
-      {rows.map((r) => <MatchRow key={String(r.id)} id={r.id} m={r.m} seedBlock={r.sb} myDecks={live.map((d) => d.id)} refetch={refetch} />)}
-      <div className="card"><h3>Ratings (players in recent matches)</h3>
-        {players.map((p, i) => <div key={p}>{p.slice(0, 8)}…{p.slice(-4)}: {String(ratings.data?.[i]?.result ?? "…")}</div>)}
-      </div>
-    </Gate>
+    <GameScreen title="FRIENDS">
+      <section className="qm-card gs-card">
+        <h2>Challenge a friend</h2>
+        {live.length === 0 ? (
+          <><p>You need a deck first.</p><Link className="cm-btn cm-play qm-btn" href="/deposit">GET COINS</Link></>
+        ) : (
+          <>
+            <select value={sel} onChange={(e) => setDeck(e.target.value)} aria-label="Your deck">
+              {live.map((d) => <option key={String(d.id)} value={String(d.id)}>{TIERS[d.tier]} deck #{String(d.id)}</option>)}
+            </select>
+            <input placeholder="Friend's account (leave empty for anyone)" value={friend} onChange={(e) => setFriend(e.target.value.trim())} aria-label="Friend's account" />
+            {!friendOk && <p className="gs-warn">That doesn't look like a NEAR account name.</p>}
+            {stake && <p className="gs-note">{stake.available > 0n ? "The match is for a small bet if you both have enough in your battle wallet. Otherwise it is just for rank." : "Your battle wallet is empty, so this match is just for rank."}</p>}
+            <TxButton label="SEND CHALLENGE" disabled={!accountId || !sel || !friendOk} onConfirmed={() => matches.refetch()}
+              request={{ receiverId: A.game, methodName: "create_challenge", args: { deck_id: sel, opponent: friend || null }, gas: TGAS(60) }} />
+            <p className="gs-note">Want a random opponent? Tap BATTLE on the main menu instead.</p>
+          </>
+        )}
+      </section>
+      {rows.length > 0 && (
+        <section className="qm-card gs-card">
+          <h2>Latest matches</h2>
+          <div className="gs-choices">{rows.map((m) => <Row key={m.id} m={m} myDecks={live.map((d) => d.id)} refetch={() => matches.refetch()} />)}</div>
+        </section>
+      )}
+    </GameScreen>
   );
 }

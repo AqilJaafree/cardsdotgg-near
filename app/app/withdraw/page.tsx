@@ -1,33 +1,58 @@
 "use client";
 import { useState } from "react";
-import { useReadContract } from "wagmi";
+import Link from "next/link";
 import { TxButton } from "@/components/TxButton";
-import { Gate } from "@/components/NotDeployed";
-import { abis, ad, ASSETS, fmtGold, fmtUsd, TIERS } from "@/lib/contracts";
+import { GameScreen } from "@/components/game/GameScreen";
+import { A, ASSETS, fmtAmount, fmtUsd, TIERS, tokenOf } from "@/lib/contracts";
+import { useWallet, type CallArgs } from "@/lib/wallet";
 import { DeckView, useDecks } from "@/lib/useDecks";
+import { useView } from "@/lib/useView";
+import { TGAS } from "@/lib/near";
+
+const SLIPPAGE_PCT = 1; // the price can move a little between asking and paying
 
 function Row({ d, refetch }: { d: DeckView; refetch: () => void }) {
+  const { accountId } = useWallet();
   const [exit, setExit] = useState(d.asset);
-  const [slip, setSlip] = useState("1");
-  const q = useReadContract({ address: ad("withdrawRouter"), abi: abis.router, functionName: "quote", args: [d.id, exit], query: { refetchInterval: 8000 } }).data as readonly [bigint, bigint] | undefined;
-  const pOut = q?.[0] ?? 0n, eOut = q?.[1] ?? 0n;
-  const fmtP = exit === 0 ? fmtUsd : fmtGold;
-  const minOut = ((pOut + eOut) * BigInt(Math.round((100 - Number(slip)) * 100))) / 10000n;
+  const q = useView<{ principal_out: string; escrow_out: string }>(A.game, "quote_withdraw", { deck_id: String(d.id), exit_asset: exit }, { interval: 10000 }).data;
+  const pOut = BigInt(q?.principal_out ?? 0), eOut = BigInt(q?.escrow_out ?? 0);
+  const total = pOut + eOut;
+  const minOut = (total * BigInt((100 - SLIPPAGE_PCT) * 100)) / 10000n;
   const blocked = d.locked > 0n;
+  // Receiving a coin the first time needs a one-time sign-up on that coin. It rides along in the same approval.
+  const registered = useView<unknown>(tokenOf(exit), "storage_balance_of", accountId ? { account_id: accountId } : undefined, { enabled: !!accountId });
+  const needsRegister = registered.data === null;
+  const withdraw: CallArgs = { receiverId: A.game, methodName: "withdraw", args: { deck_id: String(d.id), exit_asset: exit, min_out: minOut.toString() }, gas: TGAS(60) };
+  const register: CallArgs = { receiverId: tokenOf(exit), methodName: "storage_deposit", args: { account_id: accountId, registration_only: true }, deposit: "12500000000000000000000", gas: TGAS(30) };
   return (
-    <div className="card">
-      <h3>{TIERS[d.tier]} Deck #{String(d.id)}</h3>
-      <select value={exit} onChange={(e) => setExit(+e.target.value)}>{ASSETS.map((a, i) => <option key={a} value={i}>Exit as {a}</option>)}</select>{" "}
-      slippage <input size={3} value={slip} onChange={(e) => setSlip(e.target.value)} />%
-      <p>You receive: {fmtP(pOut)} {ASSETS[exit]} principal + {fmtP(eOut)} {ASSETS[exit]} escrow</p>
-      {blocked && <p className="err">A stake is locked ({fmtUsd(d.locked)} tUSD). Resolve or expire the match first.</p>}
-      <TxButton label="Withdraw all" disabled={blocked || !q} onConfirmed={refetch}
-        request={{ address: ad("withdrawRouter"), abi: abis.router, functionName: "withdraw", args: [d.id, exit, minOut] }} />
-    </div>
+    <section className="qm-card gs-card">
+      <h2>{TIERS[d.tier]} deck #{String(d.id)}</h2>
+      <p>Cashing out closes this deck and sends everything to your wallet.</p>
+      <div className="gs-choices two">
+        {ASSETS.map((a, i) => <button key={a} className={`gs-choice ${exit === i ? "on" : ""}`} onClick={() => setExit(i)}>Get {a}</button>)}
+      </div>
+      <div className="gs-stat"><span>You get about</span><b>{fmtAmount(exit, total)} {ASSETS[exit]}</b></div>
+      {blocked && <p className="gs-warn">This deck has {fmtUsd(d.locked)} tUSD in a bet. Finish or cancel the match first, then come back.</p>}
+      {needsRegister && <p className="gs-note">First time getting {ASSETS[exit]}: a small refundable fee (0.0125 NEAR) is added to the same approval.</p>}
+      <TxButton label="CASH OUT" disabled={blocked || !q || (registered.data === undefined && !registered.error)} onConfirmed={refetch}
+        request={needsRegister ? [register, withdraw] : withdraw} />
+    </section>
   );
 }
-export default function Withdraw() {
+
+export default function CashOut() {
   const { decks, refetch } = useDecks();
   const live = decks.filter((d) => !d.retired);
-  return <Gate>{live.length === 0 ? <div className="card">No active decks.</div> : live.map((d) => <Row key={String(d.id)} d={d} refetch={refetch} />)}</Gate>;
+  return (
+    <GameScreen title="CASH OUT">
+      {live.length === 0 && (
+        <section className="qm-card gs-card">
+          <h2>Nothing to cash out</h2>
+          <p>You don't have a deck right now. Make one first.</p>
+          <Link className="cm-btn cm-play qm-btn" href="/deposit">GET COINS</Link>
+        </section>
+      )}
+      {live.map((d) => <Row key={String(d.id)} d={d} refetch={refetch} />)}
+    </GameScreen>
+  );
 }

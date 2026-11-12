@@ -1,34 +1,44 @@
 "use client";
-import { useEffect } from "react";
-import { useWaitForTransactionReceipt, useWriteContract } from "wagmi";
+import { useState } from "react";
 import { explorerTx } from "@/lib/chain";
+import { useWallet, type CallArgs } from "@/lib/wallet";
 
-type Req = Parameters<ReturnType<typeof useWriteContract>["writeContract"]>[0];
-
-/** All writes go through this: wallet prompt -> pending -> explorer link, with revert reasons. */
+/** All writes go through this: wallet prompt -> pending -> explorer link, with contract panic messages. */
 export function TxButton({
   label, request, disabled, onConfirmed,
-}: { label: string; request: Req; disabled?: boolean; onConfirmed?: (hash: `0x${string}`) => void }) {
-  const { writeContract, data: hash, isPending, error, reset } = useWriteContract();
-  const rcpt = useWaitForTransactionReceipt({ hash });
+}: { label: string; request: CallArgs | CallArgs[]; disabled?: boolean; onConfirmed?: (hash?: string) => void }) {
+  const { call, accountId } = useWallet();
+  const [state, setState] = useState<"idle" | "wallet" | "done" | "failed">("idle");
+  const [hash, setHash] = useState<string>();
+  const [msg, setMsg] = useState<string>();
 
-  useEffect(() => { if (rcpt.isSuccess && hash) onConfirmed?.(hash); }, [rcpt.isSuccess, hash]); // eslint-disable-line
-
-  const status = isPending ? "Confirm in wallet…" : hash && rcpt.isLoading ? "Pending…" : label;
-  const reverted = rcpt.data?.status === "reverted";
-  const msg = (error as { shortMessage?: string } | null)?.shortMessage ?? error?.message ?? rcpt.error?.message;
+  async function run() {
+    setState("wallet"); setMsg(undefined); setHash(undefined);
+    try {
+      const r = await call(request);
+      setHash(r.hash);
+      if (r.failure) { setState("failed"); setMsg(readable(r.failure)); return; }
+      setState("done");
+      onConfirmed?.(r.hash);
+    } catch (e) {
+      setState("failed");
+      setMsg(readable((e as Error)?.message ?? String(e)));
+    }
+  }
 
   return (
     <div className="tx">
-      <button disabled={disabled || isPending || (!!hash && rcpt.isLoading)} onClick={() => { reset(); writeContract(request); }}>
-        {status}
+      <button disabled={disabled || !accountId || state === "wallet"} onClick={run}>
+        {state === "wallet" ? "Confirm in wallet…" : label}
       </button>
-      {hash && (
-        <a href={explorerTx(hash)} target="_blank" rel="noreferrer">
-          {rcpt.isSuccess && !reverted ? "✓ Confirmed" : reverted ? "✗ Reverted" : "Submitted"} · view on explorer
-        </a>
-      )}
-      {(msg || reverted) && <p className="err">{reverted ? "Transaction reverted onchain." : msg}</p>}
+      {hash && <a href={explorerTx(hash)} target="_blank" rel="noreferrer">{state === "done" ? "✓ Confirmed" : state === "failed" ? "✗ Failed" : "Submitted"} · view on explorer</a>}
+      {msg && <p className="err">{msg}</p>}
     </div>
   );
+}
+
+/** Contract panics arrive wrapped in JSON; pull out the human part. */
+function readable(s: string): string {
+  const m = s.match(/Smart contract panicked: ([^"\\]+)/);
+  return (m ? m[1] : s).slice(0, 240);
 }

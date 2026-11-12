@@ -1,32 +1,36 @@
-// Addresses and ABIs come only from ../shared via scripts/sync-shared.mjs.
-import arenaAbi from "./shared/abi/Arena.json";
-import engineAbi from "./shared/abi/BattleEngine.json";
-import nftAbi from "./shared/abi/DeckNFT.json";
-import vaultAbi from "./shared/abi/DeckVault.json";
-import oracleAbi from "./shared/abi/RateOracle.json";
-import tokenAbi from "./shared/abi/TestToken.json";
-import routerAbi from "./shared/abi/WithdrawRouter.json";
-import escrowAbi from "./shared/abi/YieldEscrow.json";
-import poolAbi from "./shared/abi/LiquidityPool.json";
+// Addresses and data come only from ../shared via scripts/sync-shared.mjs.
 import liqJson from "./shared/liquidity-source.json";
 import addressesJson from "./shared/addresses.json";
 import cardsJson from "./shared/cards.json";
 import rateSourcesJson from "./shared/rate-sources.json";
-import type { Abi } from "viem";
 
-export const A = addressesJson as unknown as Record<string, string>;
-export const deployed = !!A.arena;
-export const ad = (k: string) => A[k] as `0x${string}`;
-export const abis = {
-  arena: arenaAbi as Abi, engine: engineAbi as Abi, nft: nftAbi as Abi, vault: vaultAbi as Abi,
-  oracle: oracleAbi as Abi, token: tokenAbi as Abi, router: routerAbi as Abi, escrow: escrowAbi as Abi, pool: poolAbi as Abi,
-};
+export const A = addressesJson as unknown as { game: string; tusd: string; tnear: string; pool: string; network: string; owner: string };
+export const deployed = !!A.game;
 export type Card = { id: number; tier: number; name: string; assetClass: string; hp: number; atk: number; def: number; spd: number; ability: string; rule: string; implemented: boolean };
 export const cards = (cardsJson as { cards: Card[] }).cards;
-export const rateSources = rateSourcesJson as { tier: number | string; bps: number; live: boolean; source: string; sourceUrl: string; readAt: string }[];
+export type RateSource = { tier: number; bps: number; live: boolean; source: string; sourceUrl: string; sourceContract?: string; note?: string; poolId?: string; tvlUsd?: number; volume24hUsd?: number; readAt: string };
+export const rateSources = rateSourcesJson as RateSource[];
 export const TIERS = ["Guardian", "Balanced", "Degen"];
-export const ASSETS = ["tUSD", "tGOLD"];
+export const ASSETS = ["tUSD", "tNEAR"];
 export const STATUS = ["Open", "Awaiting seed", "Seed ready", "Resolved", "Expired"];
-export const fmtUsd = (v: bigint) => (Number(v) / 1e6).toLocaleString(undefined, { maximumFractionDigits: 4 });
-export const fmtGold = (v: bigint) => (Number(v) / 1e18).toLocaleString(undefined, { maximumFractionDigits: 4 });
+export const NEAR_DECIMALS = 24;
 export const liq = liqJson as Record<string, string | number | boolean>;
+
+const num = (v: bigint, d: number) => Number(v) / 10 ** d;
+export const fmtUsd = (v: bigint) => num(v, 6).toLocaleString(undefined, { maximumFractionDigits: 4 });
+export const fmtNear = (v: bigint) => num(v, NEAR_DECIMALS).toLocaleString(undefined, { maximumFractionDigits: 4 });
+export const fmtAmount = (asset: number, v: bigint) => (asset === 0 ? fmtUsd(v) : fmtNear(v));
+export const tokenOf = (asset: number) => (asset === 0 ? A.tusd : A.tnear);
+
+/** Exact decimal string to base units, without float rounding. Returns 0n on bad input. */
+export function parseAmount(s: string, decimals: number): bigint {
+  const t = s.trim();
+  if (!/^\d*\.?\d*$/.test(t) || t === "" || t === ".") return 0n;
+  const [i, f = ""] = t.split(".");
+  return BigInt(i || "0") * 10n ** BigInt(decimals) + BigInt((f + "0".repeat(decimals)).slice(0, decimals) || "0");
+}
+
+// Contract JSON views
+export type DeckJson = { id: string; owner: string; tier: number; asset: number; principal: string; deposit_value_usd: string; deposited_at: string; retired: boolean; available: string; locked: string; seeded: string };
+export type MatchJson = { id: string; deck_a: string; deck_b: string; player_a: string; player_b: string | null; opponent: string | null; stake_a: string; stake_b: string; seed: string | null; status: number; created_at: string; seed_block: string; winner: string | null };
+export type OracleJson = { rates_bps: [number, number, number]; last_update: string; stale: boolean; source_block: string; usd_per_near_1e6: string };

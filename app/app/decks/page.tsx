@@ -1,63 +1,43 @@
 "use client";
-import { useState } from "react";
-import { useAccount, useReadContract } from "wagmi";
+import Link from "next/link";
 import { TxButton } from "@/components/TxButton";
-import { Gate } from "@/components/NotDeployed";
-import { abis, ad, ASSETS, cards, fmtGold, fmtUsd, rateSources, TIERS } from "@/lib/contracts";
-import { svgFromUri, useDecks } from "@/lib/useDecks";
+import { GameScreen } from "@/components/game/GameScreen";
+import { A, ASSETS, cards, fmtAmount, fmtUsd, TIERS } from "@/lib/contracts";
+import { useDecks } from "@/lib/useDecks";
+import { TGAS } from "@/lib/near";
 
-function Rates() {
-  const stale = useReadContract({ address: ad("rateOracle"), abi: abis.oracle, functionName: "isStale", query: { refetchInterval: 15000 } });
-  const last = useReadContract({ address: ad("rateOracle"), abi: abis.oracle, functionName: "lastUpdate" });
-  return (
-    <div className="card">
-      <h3>Rates</h3>
-      <p><small>Rates are set by the oracle; payouts are reserve-funded testnet tUSD.</small></p>
-      {TIERS.map((t, i) => <RateRow key={t} tier={i} name={t} />)}
-      <small>Last update: {last.data ? new Date(Number(last.data) * 1000).toLocaleString() : "never"} {stale.data ? <b className="err">· stale</b> : null}</small>
-    </div>
-  );
-}
-function RateRow({ tier, name }: { tier: number; name: string }) {
-  const r = useReadContract({ address: ad("rateOracle"), abi: abis.oracle, functionName: "rateOf", args: [tier] });
-  const src = rateSources.find((s) => String(s.tier) === String(tier) || String(s.tier).toLowerCase() === name.toLowerCase());
-  return <div>{name}: {r.data === undefined ? "…" : (Number(r.data) / 100).toFixed(2) + "%"} APR · {src?.live ? <>source: Monad mainnet (<a href={src.sourceUrl} target="_blank" rel="noreferrer">{src.source}</a>, read {src.readAt})</> : "demo rate, not live"}{(src as any)?.inRange === false && <b className="err"> · out of range, not earning fees right now</b>}{(src as any)?.note && <div><small>{String((src as any).note)}</small></div>}</div>;
-}
+const LOOK = ["Safe", "Balanced", "Risky"];
 
-export default function Decks() {
-  const { address } = useAccount();
+export default function MyDecks() {
   const { decks, refetch } = useDecks();
-  const [seed, setSeed] = useState("1");
+  const live = decks.filter((d) => !d.retired);
   return (
-    <Gate>
-      <Rates />
-      {decks.length === 0 && <div className="card">No decks yet. Deposit first.</div>}
-      {decks.map((d) => {
-        const svg = svgFromUri(d.uri);
+    <GameScreen title="MY DECKS">
+      {live.length === 0 && (
+        <section className="qm-card gs-card">
+          <h2>No deck yet</h2>
+          <p>A deck is what you battle with. Get free coins, put them in, and your deck appears here.</p>
+          <Link className="cm-btn cm-play qm-btn" href="/deposit">GET COINS</Link>
+        </section>
+      )}
+      {live.map((d) => {
         const lineup = cards.filter((c) => c.tier === d.tier);
         return (
-          <div className="card" key={String(d.id)}>
-            <div className="row">
-              {svg && <img src={svg} alt={`Deck ${d.id}`} width={180} />}
-              <div>
-                <h3>{TIERS[d.tier]} Deck #{String(d.id)} {d.retired && "(retired)"}</h3>
-                <div>Principal: {d.asset === 0 ? fmtUsd(d.principal) : fmtGold(d.principal)} {ASSETS[d.asset]}</div>
-                <div>Escrow available: {fmtUsd(d.available)} tUSD{d.seeded > 0n && " (includes demo seed)"}</div>
-                <div>Locked in stake: {fmtUsd(d.locked)} tUSD</div>
-                <TxButton label="Checkpoint yield" onConfirmed={refetch} request={{ address: ad("deckVault"), abi: abis.vault, functionName: "checkpoint", args: [d.id] }} />
-              </div>
-            </div>
-            <details><summary>Cards</summary>
-              {lineup.map((c) => <div key={c.id}>{c.name} · HP {c.hp} ATK {c.atk} DEF {c.def} SPD {c.spd} · {c.ability}: {c.rule}{!c.implemented && <b className="err"> · ability inactive</b>}</div>)}
+          <section className="qm-card gs-card" key={String(d.id)}>
+            <h2>{TIERS[d.tier]} deck #{String(d.id)}</h2>
+            {d.uri && <img className="gs-deckart" src={d.uri} alt={`Deck ${d.id}`} />}
+            <div className="gs-stat"><span>Style</span><b>{LOOK[d.tier]}</b></div>
+            <div className="gs-stat"><span>Coins in your deck</span><b>{fmtAmount(d.asset, d.principal)} {ASSETS[d.asset]}</b></div>
+            <div className="gs-stat"><span>Battle wallet (used for bets)</span><b>{fmtUsd(d.available)} tUSD</b></div>
+            {d.locked > 0n && <div className="gs-stat"><span>In a bet right now</span><b>{fmtUsd(d.locked)} tUSD</b></div>}
+            <Link className="cm-btn cm-play qm-btn" href={`/play?tier=${d.tier}`}>BATTLE</Link>
+            <TxButton label="COLLECT REWARDS" onConfirmed={refetch} request={{ receiverId: A.game, methodName: "checkpoint", args: { deck_id: String(d.id) }, gas: TGAS(30) }} />
+            <details className="gs-more"><summary>Cards in this deck</summary>
+              {lineup.map((c) => <p key={c.id}><b>{c.name}</b> · HP {c.hp} · Attack {c.atk} · Defense {c.def} · Speed {c.spd}<br />{c.ability}: {c.rule}</p>)}
             </details>
-            <details><summary>Seed escrow (contract owner only)</summary>
-              <input value={seed} onChange={(e) => setSeed(e.target.value)} /> tUSD
-              <TxButton label="Seed escrow from reserve" disabled={!address} onConfirmed={refetch}
-                request={{ address: ad("yieldEscrow"), abi: abis.escrow, functionName: "seedEscrow", args: [d.id, BigInt(Math.round(Number(seed) * 1e6))] }} />
-            </details>
-          </div>
+          </section>
         );
       })}
-    </Gate>
+    </GameScreen>
   );
 }

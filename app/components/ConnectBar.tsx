@@ -1,12 +1,10 @@
 "use client";
 import Link from "next/link";
-import { useAccount, useConnect, useDisconnect } from "wagmi";
 import { BRAND } from "@/lib/brand";
+import { useWallet } from "@/lib/wallet";
 
 export function ConnectBar() {
-  const { address, isConnected } = useAccount();
-  const { connect, connectors, isPending } = useConnect();
-  const { disconnect } = useDisconnect();
+  const { accountId, ready, signIn, signOut } = useWallet();
   return (
     <header className="bar">
       <Link href="/" className="brand">{BRAND}</Link>
@@ -17,11 +15,7 @@ export function ConnectBar() {
         <Link href="/pool">Pool</Link>
         <Link href="/withdraw">Withdraw</Link>
       </nav>
-      {isConnected ? (
-        <button className="ghost" onClick={() => disconnect()}>{address!.slice(0, 6)}…{address!.slice(-4)}</button>
-      ) : (
-        <button onClick={() => connect({ connector: connectors[0] })} disabled={isPending}>Connect wallet</button>
-      )}
+      {accountId ? <button className="ghost" onClick={() => signOut()}>{accountId}</button> : <button onClick={signIn} disabled={!ready}>Connect wallet</button>}
     </header>
   );
 }

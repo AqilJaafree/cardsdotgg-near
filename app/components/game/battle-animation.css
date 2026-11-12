@@ -277,3 +277,29 @@ body:has(.game-menu) .modal-backdrop{z-index:260}
 .card button.ghost,.card .ghost{background:#fffaf0!important;color:#3b1d0e!important;border:3px solid #3b1d0e!important;border-radius:12px!important;box-shadow:0 3px 0 #3b1d0e!important;font-family:Inter,system-ui,sans-serif!important;text-shadow:none!important}
 .card select{min-width:120px;padding:8px 10px}
 .card label{color:#3b1d0e}
+
+/* Game screens for deposit / decks / withdraw / swap / friends: same look as Battle and the leaderboard. */
+.gs-title{margin:2px 0 0;font-weight:400;font-size:36px;letter-spacing:.04em;color:#ffd24a;text-shadow:3px 0 0 #3b1d0e,-3px 0 0 #3b1d0e,0 3px 0 #3b1d0e,0 -3px 0 #3b1d0e,0 6px 0 #3b1d0e}
+.gs-tabs{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;width:100%;max-width:520px}
+.gs-tab{font-size:15px;line-height:1;padding:10px 12px;border-radius:12px;border:3px solid #3b1d0e;background:linear-gradient(180deg,#f2dfb4,#d1b07a);color:#5a2e12;text-decoration:none;box-shadow:0 3px 0 #3b1d0e}
+.gs-tab.on{background:linear-gradient(180deg,#ffe27a,#f29a1d);color:#fff;text-shadow:1px 0 0 #3b1d0e,-1px 0 0 #3b1d0e,0 1px 0 #3b1d0e,0 -1px 0 #3b1d0e}
+.gs-card{margin:0!important;align-items:stretch!important;text-align:left!important}
+.gs-card h2,.gs-card h3{text-align:center;margin:0}
+.gs-card h3{font-weight:400;font-size:24px}
+.gs-card p,.gs-card small,.gs-card label,.gs-card li,.gs-card summary{font-family:Inter,system-ui,sans-serif}
+.gs-card input,.gs-card select{width:100%;height:46px;border:3px solid #3b1d0e;border-radius:12px;padding:0 12px;background:#fffaf0;color:#3b1d0e;font:600 16px Inter,system-ui,sans-serif}
+.gs-card a{color:#7a3d14}
+.gs-choices{display:grid;gap:8px}
+.gs-choices.two{grid-template-columns:1fr 1fr}
+.gs-choice{display:flex;flex-direction:column;gap:2px;text-align:left;padding:10px 12px;border-radius:12px;border:3px solid #3b1d0e;background:#fffaf0;color:#3b1d0e;font-family:"Lilita One",system-ui,sans-serif;font-size:19px;cursor:pointer}
+.gs-choice small{font-family:Inter,system-ui,sans-serif;font-size:12px;color:#6b4423}
+.gs-choice.on{background:linear-gradient(180deg,#ffe7a8,#f6c766);box-shadow:0 3px 0 #3b1d0e}
+.gs-stat{display:flex;justify-content:space-between;gap:10px;font-family:Inter,system-ui,sans-serif;font-size:14px;color:#3b1d0e}
+.gs-stat b{font-weight:700}
+.gs-deckart{display:block;width:100%;max-width:200px;margin:0 auto;border-radius:12px;border:3px solid #3b1d0e;background:#fffaf0}
+.gs-more{border-top:2px dashed #3b1d0e44;padding-top:8px}
+.gs-more summary{cursor:pointer;font-weight:700;color:#5a2e12}
+.gs-more>*{margin-top:8px}
+.gs-mini{height:40px;padding:0 14px;border-radius:12px;border:3px solid #3b1d0e;background:linear-gradient(180deg,#f2dfb4,#d1b07a);color:#5a2e12;font-family:"Lilita One",system-ui,sans-serif;font-size:16px;cursor:pointer;text-decoration:none;display:inline-grid;place-items:center}
+.gs-note{font-size:12px!important;color:#6b4423!important}
+.gs-warn{background:#fff0d6;border:2px solid #c08a2b;border-radius:10px;padding:8px 10px;font-size:13px!important}

@@ -5,8 +5,8 @@ import { useWallet, type CallArgs } from "@/lib/wallet";
 
 /** All writes go through this: wallet prompt -> pending -> explorer link, with contract panic messages. */
 export function TxButton({
-  label, request, disabled, onConfirmed,
-}: { label: string; request: CallArgs | CallArgs[]; disabled?: boolean; onConfirmed?: (hash?: string) => void }) {
+  label, request, disabled, onConfirmed, tone,
+}: { tone?: "soft"; label: string; request: CallArgs | CallArgs[]; disabled?: boolean; onConfirmed?: (hash?: string) => void }) {
   const { call, accountId } = useWallet();
   const [state, setState] = useState<"idle" | "wallet" | "done" | "failed">("idle");
   const [hash, setHash] = useState<string>();
@@ -27,7 +27,7 @@ export function TxButton({
   }
 
   return (
-    <div className="tx">
+    <div className={`tx ${tone ?? ""}`}>
       <button disabled={disabled || !accountId || state === "wallet"} onClick={run}>
         {state === "wallet" ? "Confirm in wallet…" : label}
       </button>

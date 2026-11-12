@@ -64,15 +64,22 @@ export default function Pool() {
   return (
     <GameScreen title="SWAP">
       <section className="qm-card gs-card">
-        <h2>Swap coins</h2>
+        <h2><span className="gs-step">⇄</span>Swap coins</h2>
         <p>Trade your free test coins. 1 tNEAR ≈ {price ? price.toLocaleString(undefined, { maximumFractionDigits: 2 }) : "…"} tUSD right now.</p>
-        <div className="gs-stat"><span>You have</span><b>{fmtUsd(BigInt(wT.data ?? 0))} tUSD · {fmtNear(BigInt(wN.data ?? 0))} tNEAR</b></div>
-        <div className="gs-choices two">
-          <button className={`gs-choice ${swapAsset === 0 ? "on" : ""}`} onClick={() => setSwapAsset(0)}>tUSD → tNEAR</button>
-          <button className={`gs-choice ${swapAsset === 1 ? "on" : ""}`} onClick={() => setSwapAsset(1)}>tNEAR → tUSD</button>
+        <div className="gs-wallet" aria-label="Your coins">
+          <span className="gs-coin usd"><i aria-hidden>$</i><b>{fmtUsd(BigInt(wT.data ?? 0))}</b><small>tUSD</small></span>
+          <span className="gs-coin near"><i aria-hidden>N</i><b>{fmtNear(BigInt(wN.data ?? 0))}</b><small>tNEAR</small></span>
         </div>
-        <input value={swapIn} onChange={(e) => setSwapIn(e.target.value)} inputMode="decimal" aria-label="Amount to swap" />
-        <div className="gs-stat"><span>You get about</span><b>{swapAsset === 0 ? fmtNear(out) + " tNEAR" : fmtUsd(out) + " tUSD"}</b></div>
+        <div className="gs-seg" role="tablist" aria-label="Swap direction">
+          <button role="tab" aria-selected={swapAsset === 0} className={swapAsset === 0 ? "on" : ""} onClick={() => { setSwapAsset(0); setSwapIn("10"); }}>tUSD → tNEAR</button>
+          <button role="tab" aria-selected={swapAsset === 1} className={swapAsset === 1 ? "on" : ""} onClick={() => { setSwapAsset(1); setSwapIn("1"); }}>tNEAR → tUSD</button>
+        </div>
+        <input className="gs-amount" value={swapIn} onChange={(e) => setSwapIn(e.target.value)} inputMode="decimal" aria-label="Amount to swap" />
+        <div className="gs-quick">
+          {(swapAsset === 0 ? ["10", "50", "100", "500"] : ["1", "5", "10", "25"]).map((v) => <button key={v} className={swapIn === v ? "on" : ""} onClick={() => setSwapIn(v)}>{v}</button>)}
+          <button onClick={() => setSwapIn(String(Number(swapAsset === 0 ? wT.data ?? 0 : wN.data ?? 0) / (swapAsset === 0 ? 1e6 : 1e24)))}>MAX</button>
+        </div>
+        <div className="gs-big"><small>You get about</small><b>{swapAsset === 0 ? fmtNear(out) + " tNEAR" : fmtUsd(out) + " tUSD"}</b></div>
         <TxButton label="SWAP" disabled={sAmt === 0n || out === 0n || !haveSwap} onConfirmed={() => { refetch(); quote.refetch(); }}
           request={transfer(swapAsset === 0 ? A.tusd : A.tnear, sAmt, swapMsg)} />
         {!haveSwap && sAmt > 0n && <p className="gs-note">You don't have enough of that coin. Claim more on the GET COINS tab.</p>}
@@ -85,8 +92,8 @@ export default function Pool() {
           <p className="gs-note">Add your coins to the swap pool and earn a share of the swap fees. Fees stay in the pool until you take your coins out.</p>
           <div className="gs-stat"><span>Your share of the pool</span><b>{fmtUsd(pT)} tUSD + {fmtNear(pN)} tNEAR</b></div>
           <h3>Add to the pool</h3>
-          <input value={tusd} onChange={(e) => setTusd(e.target.value)} inputMode="decimal" aria-label="tUSD to add" />
-          <input value={near} onChange={(e) => setNear(e.target.value)} inputMode="decimal" aria-label="tNEAR to add" />
+          <input className="gs-amount sm" value={tusd} onChange={(e) => setTusd(e.target.value)} inputMode="decimal" aria-label="tUSD to add" />
+          <input className="gs-amount sm" value={near} onChange={(e) => setNear(e.target.value)} inputMode="decimal" aria-label="tNEAR to add" />
           <p className="gs-note">This adds {fmtUsd(useT)} tUSD and {fmtNear(useN)} tNEAR at the pool's price.</p>
           <TxButton label="ADD TO POOL" disabled={!haveAdd} onConfirmed={refetch}
             request={[transfer(A.tusd, useT, addMsg), transfer(A.tnear, useN, addMsg)]} />

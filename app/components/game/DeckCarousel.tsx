@@ -40,3 +40,20 @@ export function DeckCarousel({ tier, onTier, yearly }: { tier: number; onTier: (
     </div>
   );
 }
+
+/** A deck's card fan with its name, on a glow in the deck's colour. Used on the deck and cash-out screens. */
+export function DeckHero({ tier, title, compact = false }: { tier: number; title?: string; compact?: boolean }) {
+  const deck = decks[tier];
+  return (
+    <div className={`gs-hero ${compact ? "compact" : ""}`} style={{ "--tier": deck.color } as React.CSSProperties}>
+      <div className="gs-car-fan">
+        {[deck.cards[1], deck.cards[0], deck.cards[2]].map((id, i) => (
+          <div key={id} className="gs-car-card" style={{ "--i": i - 1 } as React.CSSProperties}>
+            <HoloCard rarity={cardById(id).rarity}><img src={cardById(id).src} alt={cardById(id).name} draggable={false} /></HoloCard>
+          </div>
+        ))}
+      </div>
+      <b className="gs-car-name">{title ?? deck.name.toUpperCase()}</b>
+    </div>
+  );
+}

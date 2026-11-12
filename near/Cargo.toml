@@ -1,0 +1,16 @@
+[workspace]
+members = ["game", "ft", "pool"]
+resolver = "2"
+
+[workspace.dependencies]
+near-sdk = { version = "5.5", default-features = false }
+near-contract-standards = "5.5"
+
+[profile.release]
+codegen-units = 1
+opt-level = "z"
+lto = true
+debug = false
+strip = true
+panic = "abort"
+overflow-checks = true

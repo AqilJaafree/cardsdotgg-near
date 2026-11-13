@@ -16,6 +16,7 @@
     "@hot-labs/near-connect": "^0.12.0",
     "@near-js/transactions": "2.5.1",
     "lucide-react": "0.468.0",
+    "near-api-js": "7.5.3",
     "next": "14.2.18",
     "phaser": "3.90.0",
     "react": "18.3.1",

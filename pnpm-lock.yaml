@@ -19,6 +19,9 @@ importers:
       lucide-react:
         specifier: 0.468.0
         version: 0.468.0(react@18.3.1)
+      near-api-js:
+        specifier: 7.5.3
+        version: 7.5.3
       next:
         specifier: 14.2.18
         version: 14.2.18(react-dom@18.3.1(react@18.3.1))(react@18.3.1)

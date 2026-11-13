@@ -5,9 +5,10 @@ import { useWallet, type CallArgs } from "@/lib/wallet";
 
 /** All writes go through this: wallet prompt -> pending -> explorer link, with contract panic messages. */
 export function TxButton({
-  label, request, disabled, onConfirmed, tone,
-}: { tone?: "soft"; label: string; request: CallArgs | CallArgs[]; disabled?: boolean; onConfirmed?: (hash?: string) => void }) {
-  const { call, accountId } = useWallet();
+  label, request, disabled, onConfirmed, tone, withSession,
+}: { tone?: "soft"; label: string; request: CallArgs | CallArgs[]; disabled?: boolean; onConfirmed?: (hash?: string) => void;
+  /** Matchmaking buttons: also turns on quick play (a session key) in this same wallet approval. */ withSession?: boolean }) {
+  const { call, accountId, session } = useWallet();
   const [state, setState] = useState<"idle" | "wallet" | "done" | "failed">("idle");
   const [hash, setHash] = useState<string>();
   const [msg, setMsg] = useState<string>();
@@ -15,7 +16,7 @@ export function TxButton({
   async function run() {
     setState("wallet"); setMsg(undefined); setHash(undefined);
     try {
-      const r = await call(request);
+      const r = withSession && !Array.isArray(request) ? await session.startWith(request) : await call(request);
       setHash(r.hash);
       if (r.failure) { setState("failed"); setMsg(readable(r.failure)); return; }
       setState("done");
@@ -38,7 +39,7 @@ export function TxButton({
 }
 
 /** Contract panics arrive wrapped in JSON; pull out the human part. */
-function readable(s: string): string {
+export function readable(s: string): string {
   const m = s.match(/Smart contract panicked: ([^"\\]+)/);
   return (m ? m[1] : s).slice(0, 240);
 }

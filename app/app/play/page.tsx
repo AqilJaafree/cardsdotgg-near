@@ -5,6 +5,8 @@ import { useSearchParams } from "next/navigation";
 import { TxButton } from "@/components/TxButton";
 import { A, TIERS, type MatchJson } from "@/lib/contracts";
 import { useDecks } from "@/lib/useDecks";
+import OnlineBattle from "@/components/game/OnlineBattle";
+import { QuickPlay } from "@/components/game/QuickPlay";
 import { useBlockHeight, useView } from "@/lib/useView";
 import { useWallet } from "@/lib/wallet";
 import { TGAS } from "@/lib/near";
@@ -16,7 +18,7 @@ const short = (a?: string | null) => (a ? (a.length > 18 ? `${a.slice(0, 8)}…$
 
 /**
  * Online quick match, fully onchain: join a random open challenge from another player,
- * or open one and wait until the next player who taps Battle joins it. Then resolve and show the result.
+ * or open one and wait until the next player who taps Battle joins it. Then the two of you play the duel turn by turn.
  */
 function QuickMatch() {
   const { accountId: me } = useWallet();
@@ -89,17 +91,20 @@ function QuickMatch() {
     body = <>
       <h2>Opponent found!</h2>
       <p className="qm-vs"><b>You</b> vs <b>{short(target.player_a)}</b></p>
-      <p>Join their open challenge with your {TIERS[deck.tier]} deck #{String(deck.id)}.</p>
-      <TxButton label="JOIN BATTLE" onConfirmed={refetch} request={{ receiverId: A.game, methodName: "accept", args: { match_id: target.id, deck_id: String(deck.id) }, gas: TGAS(60) }} />
+      <p>Join their open challenge with your {TIERS[deck.tier]} deck #{String(deck.id)}. You take turns, and every move is recorded onchain. One approval now turns on quick play, so the fight itself has no pop-ups.</p>
+      <TxButton label="JOIN BATTLE" withSession onConfirmed={refetch} request={{ receiverId: A.game, methodName: "accept_duel", args: { match_id: target.id, deck_id: String(deck.id) }, gas: TGAS(60) }} />
     </>;
   } else {
     body = <>
       <h2>Ready to battle</h2>
       <p>Nobody is waiting right now. Open a challenge and the next player who taps Battle is matched with you.</p>
-      <p><small>{TIERS[deck.tier]} deck #{String(deck.id)} · stake comes from your yield escrow, or the match is Rank-only.</small></p>
-      <TxButton label="FIND OPPONENT" onConfirmed={refetch} request={{ receiverId: A.game, methodName: "create_challenge", args: { deck_id: String(deck.id), opponent: null }, gas: TGAS(60) }} />
+      <p><small>{TIERS[deck.tier]} deck #{String(deck.id)} · stake comes from your yield escrow, or the match is Rank-only. One approval also turns on quick play: no pop-ups during the fight.</small></p>
+      <TxButton label="FIND OPPONENT" withSession onConfirmed={refetch} request={{ receiverId: A.game, methodName: "create_challenge", args: { deck_id: String(deck.id), opponent: null }, gas: TGAS(60) }} />
     </>;
   }
+
+  // A live duel takes the whole screen, on the same board as practice mode.
+  if (mine && mine.status === 2 && me) return <OnlineBattle match={mine} me={me} onDone={refetch} />;
 
   return (
     <div className="qm-screen">
@@ -108,6 +113,7 @@ function QuickMatch() {
         <Link className="cm-square" href="/leaderboard" aria-label="Leaderboard">🏆</Link>
       </header>
       <section className="qm-card">{body}</section>
+      <QuickPlay offer={false} />
       <p className="qm-foot">Online · NEAR testnet · rating {String(rating.data ?? "…")}</p>
     </div>
   );

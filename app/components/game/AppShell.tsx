@@ -9,11 +9,11 @@ const links=[{href:"/",name:"Arena",icon:Swords},{href:"/collection",name:"Colle
 export default function AppShell({children}:{children:React.ReactNode}){
   const path=usePathname(),game=path==="/"||path==="/collection"||path==="/packs";
   // Full-screen game pages carry their own styles, so they skip the old legacy theme.
-  const screens=["/deposit","/decks","/withdraw","/pool","/arena","/play","/leaderboard"].includes(path);
+  const screens=["/deposit","/decks","/decks/build","/withdraw","/pool","/arena","/play","/leaderboard"].includes(path);
   const {accountId,ready,signIn:login,signOut:logout}=useWallet();
-  const address=accountId,isConnected=!!accountId,authenticated=!!accountId;
+  const address=accountId,isConnected=!!accountId,authenticated=!!accountId||path==="/";
   const [walletOpen,setWalletOpen]=useState(false);
-  // Every screen needs a connected wallet: until one is connected, only the connect screen shows.
+  // Every screen but the home arena (which holds the offline practice mode) needs a connected wallet.
   if(!authenticated)return <><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lilita+One&display=swap"/>
     <div className="wallet-gate">
       <img className="wallet-gate-logo" src="/cardsdotgg-logo.jpg" alt="Cardsdotgg: collect, build, battle" draggable={false}/>

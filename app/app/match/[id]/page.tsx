@@ -1,4 +1,5 @@
 "use client";
+import { describe, type DuelJson } from "@/lib/game/duel";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { Gate } from "@/components/NotDeployed";
@@ -18,6 +19,7 @@ export default function Match() {
   const args = ready ? { seed: m!.seed, tier_a: dA!.tier, tier_b: dB!.tier } : undefined;
   const log = useView<Action[]>(A.game, "simulate_with_log", args, { enabled: ready });
   const sim = useView<{ winner_side: number }>(A.game, "simulate", args, { enabled: ready });
+  const duel = useView<DuelJson | null>(A.game, "get_duel", { match_id: id }).data ?? undefined;
   const actions = log.data ?? [];
   const [shown, setShown] = useState(0);
   useEffect(() => {
@@ -40,13 +42,17 @@ export default function Match() {
     <Gate>
       <div className="card">
         <h2>Match #{id} · {m ? STATUS[m.status] : "…"}</h2>
-        <small>prototype-only randomness (block random seed). Replay is the contract's own simulate_with_log output.</small>
+        <small>{duel ? "Turn-based duel: every move below was sent by a player and recorded onchain." : "prototype-only randomness (block random seed). Replay is the contract's own simulate_with_log output."}</small>
         {m && <p>{dA && TIERS[dA.tier]} (deck #{m.deck_a}) vs {dB && TIERS[dB.tier]} (deck #{m.deck_b}) · stakes {fmtUsd(BigInt(m.stake_a))} / {fmtUsd(BigInt(m.stake_b))} tUSD · winner {m.status === 3 ? (m.winner ?? "draw") : "…"}</p>}
         {!resolved && m && <p>Not resolved yet.</p>}
         {verdict}
         {log.error && <p className="err">Replay call failed: {log.error.message.slice(0, 200)}</p>}
         <p><small>Rating changes and stake settlement appear in Arena ratings and your deck escrow.</small></p>
       </div>
+      {duel && <div className="card">
+        <p>Final score {duel.sides[0].points} – {duel.sides[1].points} ({m?.player_a} vs {m?.player_b})</p>
+        {duel.log.map((e, i) => <div key={i}>{i + 1}. {describe(e, e.side ? "B" : "A")}</div>)}
+      </div>}
       <div className="card">
         {actions.slice(0, shown).map((a, i) => (
           <div key={i}>R{a.round} · side {a.side ? "B" : "A"}: {name(a.card_id)} {KIND[a.kind] ?? "acts"}

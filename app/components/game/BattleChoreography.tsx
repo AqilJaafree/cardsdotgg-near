@@ -34,17 +34,18 @@ export function BattleOpening({ opponent, onDone, onStage }: { opponent: string;
   </div>;
 }
 
-export function AttackCinematic({ cue }: { cue: AttackCue }) {
+export function AttackCinematic({ cue, move, title }: { cue: AttackCue; move?: string; title?: string }) {
   const card = cardById(cue.cardId);
   return <div className={`attack-cinematic attack-tier-${cue.tier} attack-from-${cue.side}`} key={cue.id} aria-live="polite">
     <div className="attack-dimmer"/>
     <img className="attack-hero" src={card.src} alt={card.name}/>
-    <div className="attack-title-band"><b>{moveName(cue.cardId)}</b><small>{card.name}{cue.strong ? " · Power attack" : ""}</small></div>
+    <div className="attack-title-band"><b>{move ?? moveName(cue.cardId)}</b><small>{title ?? card.name}{cue.strong ? " · Power attack" : ""}</small></div>
     <div className="attack-speed-lines"/>
   </div>;
 }
 
-export function AttackChoices({ unit, tier, onAttack, onClose, onInspect }: { unit: Fighter; tier: number; onAttack: (strong: boolean) => void; onClose: () => void; onInspect: () => void }) {
+/** Online duels pass their own numbers: `basic` and `power` damage, the Energy a power attack needs, and the move name. */
+export function AttackChoices({ unit, tier, onAttack, onClose, onInspect, basic, power, powerCost = 2, move }: { unit: Fighter; tier: number; onAttack: (strong: boolean) => void; onClose: () => void; onInspect: () => void; basic?: number; power?: number; powerCost?: number; move?: string }) {
   useEffect(() => {
     const close = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
     window.addEventListener("keydown", close);
@@ -54,8 +55,8 @@ export function AttackChoices({ unit, tier, onAttack, onClose, onInspect }: { un
     <button className="attack-dismiss" onClick={onClose} aria-label="Close attack choices"><X size={19}/></button>
     <button className="choice-card" onClick={onInspect} aria-label="Inspect active card"><img src={cardById(unit.id).src} alt={cardById(unit.id).name}/></button>
     <div className={`move-options attack-tier-${tier}`}>
-      <button autoFocus onClick={() => onAttack(false)}><span><Energy tier={tier}/><b>{moveName(unit.id)}</b></span><strong>{practiceDamage(unit, false)}</strong><small>Attack with your active Pokémon.</small></button>
-      <button disabled={unit.energy < 2} onClick={() => onAttack(true)}><span><Zap size={15}/><b>Power attack</b></span><strong>{practiceDamage(unit, true)}</strong><small>{unit.energy < 2 ? "Attach 2 Energy to unlock" : "Charge up for a stronger hit."}</small></button>
+      <button autoFocus onClick={() => onAttack(false)}><span><Energy tier={tier}/><b>{move ?? moveName(unit.id)}</b></span><strong>{basic ?? practiceDamage(unit, false)}</strong><small>Attack with your active card.</small></button>
+      <button disabled={unit.energy < powerCost} onClick={() => onAttack(true)}><span><Zap size={15}/><b>Power attack</b></span><strong>{power ?? practiceDamage(unit, true)}</strong><small>{unit.energy < powerCost ? `Attach ${powerCost} Energy to unlock` : "Charge up for a stronger hit."}</small></button>
       <button className="move-cancel" onClick={onClose}>Back to the board</button>
     </div>
   </div>;

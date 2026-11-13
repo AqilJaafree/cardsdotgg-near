@@ -12,7 +12,7 @@ export type RateSource = { tier: number; bps: number; live: boolean; source: str
 export const rateSources = rateSourcesJson as RateSource[];
 export const TIERS = ["Guardian", "Balanced", "Degen"];
 export const ASSETS = ["tUSD", "tNEAR"];
-export const STATUS = ["Open", "Awaiting seed", "Seed ready", "Resolved", "Expired"];
+export const STATUS = ["Open", "Awaiting seed", "In play", "Resolved", "Expired"];
 export const NEAR_DECIMALS = 24;
 export const liq = liqJson as Record<string, string | number | boolean>;
 

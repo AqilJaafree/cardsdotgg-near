@@ -6,3 +6,4 @@ next-env.d.ts
 app/tsconfig.tsbuildinfo
 lib/shared
 tsconfig.tsbuildinfo
+.next-*

@@ -7,6 +7,7 @@
 //! Accounting invariant for tUSD held by this contract:
 //!   balance = reserve + liquidity[0] + total_principal[0] + prize_pool + sum(deck escrow) + sum(deck locked)
 pub mod card_data;
+pub mod duel;
 pub mod elo;
 pub mod engine;
 pub mod svg;
@@ -78,6 +79,7 @@ struct Match {
 
 const OPEN: u8 = 0;
 const AWAITING: u8 = 1;
+const PLAYING: u8 = 2; // turn-based duel in progress
 const RESOLVED: u8 = 3;
 const EXPIRED: u8 = 4;
 
@@ -114,6 +116,22 @@ pub struct MatchView {
     pub created_at: U64,
     pub seed_block: U64,
     pub winner: Option<AccountId>,
+}
+
+/// A deck's chosen cards and art. `custom` is false for a deck still on its tier's starter cards.
+#[derive(Serialize)]
+#[serde(crate = "near_sdk::serde")]
+pub struct DeckCardsView {
+    pub cards: Vec<u8>,
+    pub art: Vec<u8>,
+    pub custom: bool,
+}
+
+#[near(serializers = [borsh])]
+#[derive(Clone)]
+struct DeckCards {
+    cards: [u8; 8],
+    art: [u8; 8],
 }
 
 #[derive(Serialize)]
@@ -413,31 +431,102 @@ impl Game {
     }
 
     pub fn accept(&mut self, match_id: U64, deck_id: U64) {
-        let caller = env::predecessor_account_id();
-        let mut m = self.match_of(match_id.0);
-        require!(m.status == OPEN, "not open");
-        require!(now() < m.created_at + CHALLENGE_TTL_SECS, "expired");
-        require!(caller != m.player_a, "own challenge");
-        require!(m.opponent.is_none() || m.opponent.as_ref() == Some(&caller), "not opponent");
-        self.require_owned_active(deck_id.0, &caller);
-        require!(!self.deck(m.deck_a).retired, "challenger retired");
-
-        m.deck_b = deck_id.0;
-        m.player_b = Some(caller);
+        let mut m = self.join_challenge(match_id.0, deck_id.0);
         m.status = AWAITING;
         m.seed_block = env::block_height() + 1;
-
-        let stake = self.stake_for(deck_id.0);
-        let staked = m.stake_a > 0 && self.available_of(&self.deck(deck_id.0)) >= stake;
-        if staked {
-            m.stake_b = stake;
-            self.lock(deck_id.0, stake);
-        } else if m.stake_a > 0 {
-            m.stake_a = 0; // either player short means Rank-only
-            self.release(m.deck_a);
-        }
         self.matches.insert(match_id.0, m);
-        env::log_str(&format!("ChallengeAccepted {} {} {}", match_id.0, deck_id.0, staked));
+    }
+
+    /// Accept a challenge as a turn-based duel: players alternate onchain moves (`play`) instead of an auto-battle.
+    pub fn accept_duel(&mut self, match_id: U64, deck_id: U64) {
+        let mut m = self.join_challenge(match_id.0, deck_id.0);
+        m.status = PLAYING;
+        // SPD decides who moves first; the block's random seed only breaks ties.
+        let seed = self.duel_seed(match_id.0, 0);
+        let d = duel::Duel::with_decks(&self.setup_of(m.deck_a), &self.setup_of(m.deck_b), seed, now());
+        let first = d.mover;
+        self.duel_put(match_id.0, &d);
+        self.matches.insert(match_id.0, m);
+        env::log_str(&format!("DuelStarted {} {}", match_id.0, first));
+    }
+
+    /// One move by the player whose turn it is. `action`: 0 attach energy, 1 attack, 2 power attack, 3 retreat to bench
+    /// slot `arg` (costs 1 energy). An attack ends the turn. Reaching 3 points ends the match and pays out right here.
+    pub fn play(&mut self, match_id: U64, action: u8, arg: u8) {
+        self.play_turn(match_id, vec![(action, arg)]);
+    }
+
+    /// A whole turn in one transaction (one signature): moves are applied in order, for example attach, retreat, attack.
+    /// All or nothing: if any move is illegal the whole call reverts. Moves after the match ends are rejected.
+    pub fn play_turn(&mut self, match_id: U64, moves: Vec<(u8, u8)>) {
+        let caller = env::predecessor_account_id();
+        let m = self.match_of(match_id.0);
+        require!(m.status == PLAYING, "not a live duel");
+        require!(!moves.is_empty() && moves.len() <= 4, "1 to 4 moves");
+        let mut d = self.duel_of(match_id.0);
+        let side = self.side_of(&m, &caller);
+        require!(d.mover == side, "not your turn");
+        for (action, arg) in moves {
+            require!(d.mover == side && d.winner.is_none(), "turn is over");
+            let act = duel::Action::parse(action, arg).unwrap_or_else(|| env::panic_str("unknown action"));
+            // Rolls come from the block this move lands in, so the mover cannot know them when choosing.
+            let seed = self.duel_seed(match_id.0, d.log.len() as u64);
+            if let Err(e) = d.play(act, now(), seed) {
+                env::panic_str(e.message());
+            }
+            let last = d.log.last().cloned().unwrap();
+            env::log_str(&format!("DuelMove {} {} {} {} {} {} {}", match_id.0, side, last.action, last.arg, last.damage, last.crit, last.ko));
+        }
+        self.after_duel_move(match_id.0, m, d);
+    }
+
+    /// A player gives up. The other player wins and the stakes settle as usual.
+    pub fn forfeit(&mut self, match_id: U64) {
+        let caller = env::predecessor_account_id();
+        let m = self.match_of(match_id.0);
+        require!(m.status == PLAYING, "not a live duel");
+        let mut d = self.duel_of(match_id.0);
+        let side = self.side_of(&m, &caller);
+        d.concede(side, now());
+        env::log_str(&format!("DuelForfeit {} {}", match_id.0, side));
+        self.after_duel_move(match_id.0, m, d);
+    }
+
+    /// Anyone, once the player to move has been silent for `duel::TURN_SECS`: the player who is waiting wins.
+    pub fn claim_timeout(&mut self, match_id: U64) {
+        let m = self.match_of(match_id.0);
+        require!(m.status == PLAYING, "not a live duel");
+        let mut d = self.duel_of(match_id.0);
+        require!(now() >= d.last_move_at + duel::TURN_SECS, "still their turn");
+        let slow = d.mover;
+        d.concede(slow, now());
+        env::log_str(&format!("DuelTimeout {} {}", match_id.0, slow));
+        self.after_duel_move(match_id.0, m, d);
+    }
+
+    /// Pick the deck's 8 creatures (the first leads, the next 3 start on the bench, the last 4 in hand) and an art skin
+    /// for each (0 = default face, 1..=102 = a card image). Only the owner, and not while coins are staked.
+    pub fn set_deck_cards(&mut self, deck_id: U64, cards: Vec<u8>, art: Vec<u8>) {
+        let caller = env::predecessor_account_id();
+        self.require_owned_active(deck_id.0, &caller);
+        if let Err(e) = duel::check_deck(&cards, &art) {
+            env::panic_str(e);
+        }
+        let mut map = Self::deck_cards();
+        map.insert(deck_id.0, DeckCards { cards: cards.clone().try_into().unwrap(), art: art.try_into().unwrap() });
+        map.flush();
+        env::log_str(&format!("DeckCustomized {} {:?}", deck_id.0, cards));
+    }
+
+    /// The deck's current cards and art; the tier's starter cards with default art until customized.
+    pub fn get_deck_cards(&self, deck_id: U64) -> DeckCardsView {
+        let setup = self.setup_of(deck_id.0);
+        DeckCardsView { cards: setup.lineup.to_vec(), art: setup.art.to_vec(), custom: Self::deck_cards().contains_key(&deck_id.0) }
+    }
+
+    /// Open duel state, move log included. None for matches that were not accepted as duels.
+    pub fn get_duel(&self, match_id: U64) -> Option<duel::Duel> {
+        Self::duels().get(&match_id.0).cloned()
     }
 
     /// Anyone, once the seed block has passed. The seed mixes the block's random seed with the match, so it is not
@@ -642,6 +731,100 @@ impl Game {
 
     fn match_of(&self, id: u64) -> Match {
         self.matches.get(&id).cloned().unwrap_or_else(|| env::panic_str("no such match"))
+    }
+
+    /// The shared half of accepting a challenge: validates, locks stakes, records the opponent.
+    fn join_challenge(&mut self, match_id: u64, deck_id: u64) -> Match {
+        let caller = env::predecessor_account_id();
+        let mut m = self.match_of(match_id);
+        require!(m.status == OPEN, "not open");
+        require!(now() < m.created_at + CHALLENGE_TTL_SECS, "expired");
+        require!(caller != m.player_a, "own challenge");
+        require!(m.opponent.is_none() || m.opponent.as_ref() == Some(&caller), "not opponent");
+        self.require_owned_active(deck_id, &caller);
+        require!(!self.deck(m.deck_a).retired, "challenger retired");
+
+        m.deck_b = deck_id;
+        m.player_b = Some(caller);
+
+        let stake = self.stake_for(deck_id);
+        let staked = m.stake_a > 0 && self.available_of(&self.deck(deck_id)) >= stake;
+        if staked {
+            m.stake_b = stake;
+            self.lock(deck_id, stake);
+        } else if m.stake_a > 0 {
+            m.stake_a = 0; // either player short means Rank-only
+            self.release(m.deck_a);
+        }
+        env::log_str(&format!("ChallengeAccepted {} {} {}", match_id, deck_id, staked));
+        m
+    }
+
+    /// Duels live in their own map under prefix "u" so adding them does not change the contract's stored state.
+    fn duels() -> LookupMap<u64, duel::Duel> {
+        LookupMap::new(b"u")
+    }
+
+    /// Per-move randomness: the block's random seed mixed with the match and how many moves came before.
+    fn duel_seed(&self, id: u64, n: u64) -> [u8; 32] {
+        let mut input = Vec::with_capacity(48);
+        input.extend_from_slice(&id.to_be_bytes());
+        input.extend_from_slice(&n.to_be_bytes());
+        input.extend_from_slice(&env::random_seed());
+        env::keccak256_array(&input)
+    }
+
+    /// Custom deck cards live in their own map under prefix "c", for the same no-migration reason as duels.
+    fn deck_cards() -> LookupMap<u64, DeckCards> {
+        LookupMap::new(b"c")
+    }
+
+    /// The deck as a duel brings it: custom cards and art if set, else the tier's starter cards.
+    fn setup_of(&self, deck_id: u64) -> duel::Setup {
+        let tier = self.deck(deck_id).tier;
+        match Self::deck_cards().get(&deck_id) {
+            Some(c) => duel::Setup { lineup: c.cards, art: c.art, tier },
+            None => duel::Setup::tier(tier),
+        }
+    }
+
+    fn duel_of(&self, id: u64) -> duel::Duel {
+        Self::duels().get(&id).cloned().unwrap_or_else(|| env::panic_str("no such duel"))
+    }
+
+    fn duel_put(&self, id: u64, d: &duel::Duel) {
+        let mut map = Self::duels();
+        map.insert(id, d.clone());
+        map.flush();
+    }
+
+    fn side_of(&self, m: &Match, who: &AccountId) -> u8 {
+        if *who == m.player_a {
+            0
+        } else if m.player_b.as_ref() == Some(who) {
+            1
+        } else {
+            env::panic_str("not a player in this match")
+        }
+    }
+
+    /// Store the duel; if someone just won, close the match: winner, stakes, ratings.
+    fn after_duel_move(&mut self, id: u64, mut m: Match, d: duel::Duel) {
+        self.duel_put(id, &d);
+        let Some(side) = d.winner else { return };
+        let player_b = m.player_b.clone().unwrap_or_else(|| env::panic_str("no opponent"));
+        m.status = RESOLVED;
+        m.winner = match side {
+            0 => Some(m.player_a.clone()),
+            1 => Some(player_b.clone()),
+            _ => None, // draw
+        };
+        if m.stake_a > 0 {
+            self.settle_stakes(&m, side);
+        }
+        self.update_ratings(&m.player_a, &player_b, side, id);
+        env::log_str(&format!("DuelFinished {} {} {} {}", id, side, d.sides[0].points, d.sides[1].points));
+        self.matches.insert(id, m);
     }
 
     fn usd_value(&self, asset: u8, amount: u128) -> u128 {

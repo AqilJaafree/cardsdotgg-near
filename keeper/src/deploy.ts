@@ -2,7 +2,7 @@
 //   1. cd near && cargo build --target wasm32-unknown-unknown --release   (or: cargo near build non-reproducible-wasm per crate)
 //   2. cd keeper && pnpm dry     (reads Rhea; the pool opens at that price and depth)
 //   3. NEAR_OWNER_ID=you.testnet NEAR_OWNER_KEY=ed25519:... pnpm deploy-testnet
-// CODE_ONLY=1 redeploys the wasm without touching state. RESUME=1 skips deploy and init and continues from registration and funding.
+// CODE_ONLY=1 redeploys the wasm without touching state (ONLY=game limits it to one contract). RESUME=1 skips deploy and init and continues from registration and funding.
 // Env: NEAR_OWNER_ID, NEAR_OWNER_KEY, optional KEEPER_ACCOUNT_ID (defaults to the owner), NEAR_TESTNET_RPC.
 // NEAR holds one contract per account, so the owner account hosts the game contract and the two tokens and the pool each
 // get a fresh implicit account (a 64-hex id funded by a transfer; sub-accounts are not allowed under hex accounts).
@@ -59,7 +59,11 @@ async function createAndDeploy(id: string, crate: string) {
 async function main() {
   const NEAR = 10n ** 24n;
   if (process.env.CODE_ONLY) { // replace the wasm on the existing accounts, keeping their state
-    for (const [id, crate] of [[ids.tusd, "cardsdotgg_ft"], [ids.tnear, "cardsdotgg_ft"], [ids.game, "cardsdotgg_game"], [ids.pool, "cardsdotgg_pool"]]) await createAndDeploy(id, crate);
+    // ONLY=game (or tusd, tnear, pool; comma separated) replaces just those contracts' code.
+    const only = process.env.ONLY?.split(",").map((x) => x.trim());
+    for (const [name, id, crate] of [["tusd", ids.tusd, "cardsdotgg_ft"], ["tnear", ids.tnear, "cardsdotgg_ft"], ["game", ids.game, "cardsdotgg_game"], ["pool", ids.pool, "cardsdotgg_pool"]]) {
+      if (!only || only.includes(name)) await createAndDeploy(id, crate);
+    }
     return;
   }
   if (!process.env.RESUME) {

@@ -1,0 +1,16 @@
+# Netlify: deploys the Next.js app in app/ (the game client). Contracts and the keeper are not deployed here.
+# Netlify detects Next.js and adds its Next.js runtime automatically; no plugin needs to be listed.
+[build]
+  base = "app"
+  # prebuild (scripts/sync-shared.mjs) copies ../shared into app/lib/shared, so the whole repo must be checked out (it is).
+  command = "pnpm build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+# Card art and pack images never change once published.
+[[headers]]
+  for = "/cards/*"
+  [headers.values]
+    Cache-Control = "public, max-age=604800, immutable"

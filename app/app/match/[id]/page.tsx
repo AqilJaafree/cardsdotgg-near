@@ -1,7 +1,9 @@
 "use client";
-import { describe, type DuelJson } from "@/lib/game/duel";
+import ReplayBattle from "@/components/game/ReplayBattle";
+import { type DuelJson } from "@/lib/game/duel";
+import { useWallet } from "@/lib/wallet";
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { Gate } from "@/components/NotDeployed";
 import { A, cards, fmtUsd, STATUS, TIERS, type DeckJson, type MatchJson } from "@/lib/contracts";
 import { useView } from "@/lib/useView";
@@ -20,6 +22,8 @@ export default function Match() {
   const log = useView<Action[]>(A.game, "simulate_with_log", args, { enabled: ready });
   const sim = useView<{ winner_side: number }>(A.game, "simulate", args, { enabled: ready });
   const duel = useView<DuelJson | null>(A.game, "get_duel", { match_id: id }).data ?? undefined;
+  const { accountId } = useWallet();
+  const router = useRouter();
   const actions = log.data ?? [];
   const [shown, setShown] = useState(0);
   useEffect(() => {
@@ -37,22 +41,21 @@ export default function Match() {
     const ok = replayWinner === m.winner;
     verdict = ok ? <p>✓ Replay winner matches the onchain result.</p> : <p className="err">✗ MISMATCH: replay winner {replayWinner ?? "draw"} vs onchain {m.winner ?? "draw"}</p>;
   }
+  // A turn-based duel replays on the same board as the live game. You watch from your own side if you played it.
+  if (duel && m) return <ReplayBattle duel={duel} match={m} mySide={m.player_b === accountId ? 1 : 0} onClose={() => router.push("/play")} />;
+
   const name = (c: number) => cards[c]?.name ?? `#${c}`;
   return (
     <Gate>
       <div className="card">
         <h2>Match #{id} · {m ? STATUS[m.status] : "…"}</h2>
-        <small>{duel ? "Turn-based duel: every move below was sent by a player and recorded onchain." : "prototype-only randomness (block random seed). Replay is the contract's own simulate_with_log output."}</small>
+        <small>prototype-only randomness (block random seed). Replay is the contract's own simulate_with_log output.</small>
         {m && <p>{dA && TIERS[dA.tier]} (deck #{m.deck_a}) vs {dB && TIERS[dB.tier]} (deck #{m.deck_b}) · stakes {fmtUsd(BigInt(m.stake_a))} / {fmtUsd(BigInt(m.stake_b))} tUSD · winner {m.status === 3 ? (m.winner ?? "draw") : "…"}</p>}
         {!resolved && m && <p>Not resolved yet.</p>}
         {verdict}
         {log.error && <p className="err">Replay call failed: {log.error.message.slice(0, 200)}</p>}
         <p><small>Rating changes and stake settlement appear in Arena ratings and your deck escrow.</small></p>
       </div>
-      {duel && <div className="card">
-        <p>Final score {duel.sides[0].points} – {duel.sides[1].points} ({m?.player_a} vs {m?.player_b})</p>
-        {duel.log.map((e, i) => <div key={i}>{i + 1}. {describe(e, e.side ? "B" : "A")}</div>)}
-      </div>}
       <div className="card">
         {actions.slice(0, shown).map((a, i) => (
           <div key={i}>R{a.round} · side {a.side ? "B" : "A"}: {name(a.card_id)} {KIND[a.kind] ?? "acts"}

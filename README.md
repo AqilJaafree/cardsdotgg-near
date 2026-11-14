@@ -11,8 +11,10 @@
 [![Next.js](https://img.shields.io/badge/app-Next.js%2014-black?logo=nextdotjs)](app)
 [![Yield data](https://img.shields.io/badge/yield%20data-Rhea%20pools-6c47ff)](#where-rhea-data-is-used)
 [![Status](https://img.shields.io/badge/status-prototype-orange)](#overview)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![NEAR HACKATHON](https://img.shields.io/badge/built%20at-NEAR%20HACKATHON-00ec97)](#built-at-near-hackathon)
 
-[Why NEAR](#why-near) · [App tour](#app-tour) · [How it works](#how-it-works) · [Game rules](#game-rules) · [Architecture](#architecture) · [Quick start](#quick-start)
+[Problem](#problem) · [Why NEAR](#why-near) · [App tour](#app-tour) · [How it works](#how-it-works) · [Game rules](#game-rules) · [Architecture](#architecture) · [Quick start](#quick-start)
 
 </div>
 
@@ -20,6 +22,7 @@
 
 ## Table of contents
 
+- [Problem](#problem)
 - [Overview](#overview)
 - [Why NEAR](#why-near)
 - [App tour](#app-tour)
@@ -32,7 +35,19 @@
 - [Where Rhea data is used](#where-rhea-data-is-used)
 - [Project layout](#project-layout)
 - [Testing](#testing)
+- [Built at NEAR HACKATHON](#built-at-near-hackathon)
 - [Credits](#credits)
+- [License](#license)
+
+## Problem
+
+At a Pokémon card shop in Japan, many collectors only wanted the chase cards. Thousands of commons and lower-tier cards were thrown into bins and never used: real cards, printed and paid for, with nothing to do once the rare was found.
+
+cardsdotgg gives every card a job:
+
+- **Every card plays.** In the game, commons and uncommons are real parts of a deck, not filler. Pictures from packs add HP in battle, and any creature can earn a slot.
+- **Real cards stay in play.** The White Flare season puts physical cards (most of them commons, one of each) into packs as one-of-one NEAR NFTs. Whoever pulls a card owns it on-chain and can keep it or pass it to another player, instead of it ending up in a bin.
+- **Fun beyond the chase.** The arcade turns opening packs into a game you play, win or lose, so the pull is worth it even when it is not the rare.
 
 ## Overview
 
@@ -48,6 +63,14 @@ cardsdotgg is a trading-card battler where your deck is a DeFi position. You put
 - **Practice for free.** Practice plays the same rules against the computer, with your own saved deck, and sends nothing to the chain.
 
 > **Status:** deployed on NEAR testnet and exercised end to end (claim, deposit, seed, challenge, accept, resolve, replay, withdraw), plus a full turn-based duel with session keys only (`pnpm e2e:duel`), a free arcade ticket opening a trial pack with ownership checks (`pnpm e2e:packs`), and the claw-to-NFT season flow (`pnpm e2e:season`). Players have pulled 8 of the 23 White Flare cards on testnet.
+
+### Try it in 5 minutes
+
+1. Open the app (or run it locally with the [Quick start](#quick-start)) and tap **PRACTICE**: a full duel against the computer, no wallet needed.
+2. Sign in with a NEAR **testnet** wallet (Meteor, HOT or MyNearWallet). In the wallet sheet (top right), tap **GET TESTNET NEAR** for free test NEAR from NEAR's official faucet.
+3. Go to **ARCADE**, play **Stacker** for a free Pack Ticket, then open a trial pack from the **MARKET**.
+4. Go to **GET COINS** to claim free tUSD and make a deck, then **BATTLE** another player (or a second wallet) turn by turn on-chain.
+5. Play the **Claw** (2 tUSD) for a Season Ticket and open the **White Flare** pack: one real card, minted to you as a NEAR NFT, shown in **COLLECTION → White Flare**.
 
 ## Why NEAR
 
@@ -423,9 +446,34 @@ A one-shot keeper (`keeper/`) reads NEAR mainnet and writes `shared/rate-sources
 | Live, packs | `cd keeper && pnpm e2e:packs` | Earns a free Pack Ticket, opens a trial pack with it, checks the unlock, and that unowned cards are refused |
 | Live, season | `cd keeper && CONSUME_STOCK=1 pnpm e2e:season` | A paid claw play, its result, and a season pack minting one real card as an NFT (uses up one card from the stock) |
 
+## Built at NEAR HACKATHON
+
+| | |
+| --- | --- |
+| **Event** | NEAR HACKATHON, development window 2026-11-01 to 2026-11-14 (UTC) |
+| **Suggested tracks** | Games With Real Economies (`games`), NFTs That Do Something (`nfts`), Real-World Money (`realworld`) |
+| **Timeline** | All code was written in the window: the first commit is 2026-11-03 and there are no earlier commits. |
+| **Prior work on another chain** | The project started on 2026-11-03 as a Monad prototype at Monad Blitz Devcon Mumbai, from that event's template repository ([`monad-developers/monad-blitz-devcon-mumbai`](https://github.com/monad-developers/monad-blitz-devcon-mumbai)). It was then rebuilt for NEAR inside the window: every NEAR contract, the NEAR wallet and session-key code, the arcade, the White Flare NFTs and the NEAR Intents payment were built here. The Monad contracts and spec have been removed from this repository. |
+| **AI tools** | Built with the help of [Claude Code](https://claude.com/claude-code) (Anthropic) for code, tests, UI and documentation, directed and reviewed by the author. |
+| **Card art** | The trial pictures in `app/public/cards` are Pokémon TCG Base Set images used as placeholders for the hackathon, labelled "Trial" in the app. The White Flare photos in `app/public/cards/wf-token` are of physical cards owned by the project. Graded-card images load from the marketplaces' own listings. Pokémon names and art belong to their owners; this project is not affiliated with The Pokémon Company, Nintendo, Creatures or GAME FREAK. |
+
+**Libraries and services**
+
+| Area | Used |
+| --- | --- |
+| Contracts | [near-sdk-rs](https://github.com/near/near-sdk-rs) 5.5, `sha3` |
+| App | [Next.js](https://nextjs.org) 14, React 18, [three.js](https://threejs.org) (pack and card scenes), [Phaser](https://phaser.io), [lucide-react](https://lucide.dev) icons, Google Fonts (Lilita One, Inter) |
+| NEAR | [`@hot-labs/near-connect`](https://github.com/hot-dao/near-selector) (wallets), [`near-api-js`](https://github.com/near/near-api-js) and `@near-js/transactions` (session keys, keeper), [NEAR Intents](https://docs.near-intents.org) 1Click API |
+| Data | [Rhea](https://rhea.finance) pools (yield rates), [Collector Crypt](https://collectorcrypt.com) and [Magic Eden](https://magiceden.io) public listing APIs |
+| Tooling | pnpm workspaces, TypeScript, `tsx`, `binaryen` (wasm optimisation), Playwright (screenshots) |
+
 ## Credits
 
 - Game rules and card data: [`shared/engine-rules.md`](shared/engine-rules.md) and [`shared/cards.json`](shared/cards.json).
 - Yield and price data: [Rhea](https://rhea.finance) pools on NEAR mainnet.
 - Graded card listings: [Collector Crypt](https://collectorcrypt.com) and [Magic Eden](https://magiceden.io). Cross-chain payment: [NEAR Intents](https://docs.near-intents.org).
 - Wallet connection: [`@hot-labs/near-connect`](https://github.com/hot-dao/near-selector). Contracts built on [near-sdk-rs](https://github.com/near/near-sdk-rs).
+
+## License
+
+[MIT](LICENSE).

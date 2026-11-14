@@ -7,13 +7,17 @@ import { cardMesh, loadTexture, disposeScene, smooth } from "@/lib/game/three-ut
 import { sound } from "@/lib/game/sound";
 
 /** A dedicated 3D scene, shared by pre-battle showcases and card inspection. */
-export default function CardTheater({ ids, title = "Your battle lineup", onDone, inspection = false, pack = false }: { ids: number[]; title?: string; onDone: () => void; inspection?: boolean; pack?: boolean }) {
+/** A card to show that is not in the picture catalog, e.g. the photo of a tokenized physical card. */
+export type TheaterCard = { src: string; name: string; rarity: string };
+
+export default function CardTheater({ ids, cards, title = "Your battle lineup", onDone, inspection = false, pack = false }: { ids: number[]; cards?: TheaterCard[]; title?: string; onDone: () => void; inspection?: boolean; pack?: boolean }) {
+  const look = (i: number): TheaterCard => cards?.[i] ?? cardById(ids[i]);
   const host = useRef<HTMLDivElement>(null);
   const dialog = useRef<HTMLDivElement>(null);
   const [index,setIndex] = useState(0), [failed,setFailed] = useState(false), [auto,setAuto] = useState(!inspection&&!pack);
   const indexRef = useRef(0); const indexChanged = useRef(0);
   const finish = useRef(onDone); finish.current = onDone;
-  useEffect(() => { indexRef.current = index; indexChanged.current = performance.now(); sound(pack&&cardById(ids[index]).rarity==="Holo Rare"?"rare":"flip"); }, [index]);
+  useEffect(() => { indexRef.current = index; indexChanged.current = performance.now(); sound(pack&&look(index).rarity==="Holo Rare"?"rare":"flip"); }, [index]);
   useEffect(() => {
     if (!auto || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const timer = setInterval(() => setIndex((previous) => { if (previous >= ids.length - 1) { setAuto(false); return previous; } return previous + 1; }), 2250);
@@ -42,7 +46,7 @@ export default function CardTheater({ ids, title = "Your battle lineup", onDone,
     const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(38,1,.1,100);
     camera.position.z = 7.5;
     const loader = new THREE.TextureLoader(); const back = loadTexture(loader,"/cards/back.svg");
-    const textures = ids.map(id => loadTexture(loader,cardById(id).src));
+    const textures = ids.map((_, i) => loadTexture(loader,look(i).src));
     const hero = cardMesh(textures[0],back); scene.add(hero);
     const foil = new THREE.Mesh(new THREE.PlaneGeometry(2.5,3.4375),new THREE.ShaderMaterial({ transparent:true, depthWrite:false, blending:THREE.AdditiveBlending, uniforms:{time:{value:0},strength:{value:.15}}, vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,fragmentShader:`varying vec2 vUv;uniform float time;uniform float strength;void main(){float stripe=pow(max(0.,sin((vUv.x+vUv.y*.65)*4.+time)),18.);vec3 rainbow=.5+.5*cos(6.28318*(vUv.x+time*.08+vec3(0.,.33,.67)));float art=step(.15,vUv.x)*step(vUv.x,.86)*step(.44,vUv.y)*step(vUv.y,.84);gl_FragColor=vec4(rainbow,stripe*strength*(.2+.8*art));}` }));
     foil.position.z=.03; hero.add(foil);
@@ -67,7 +71,7 @@ export default function CardTheater({ ids, title = "Your battle lineup", onDone,
       hero.position.y=reduced?0:Math.sin(t*.9)*.07;
       hero.scale.setScalar(reduced?1:.86+smooth(elapsed/1.05)*.14);
       (foil.material as THREE.ShaderMaterial).uniforms.time.value=t*1.15;
-      (foil.material as THREE.ShaderMaterial).uniforms.strength.value=cardById(ids[idx]).rarity==="Holo Rare"?.35:.09;
+      (foil.material as THREE.ShaderMaterial).uniforms.strength.value=look(idx).rarity==="Holo Rare"?.35:.09;
       if(!reduced){floaters.forEach((f,i)=>{f.rotation.y+=.002;f.position.y+=Math.sin(t*.25+i)*.001;});stars.rotation.y=t*.012;}
       renderer.render(scene,camera);
     }
@@ -76,7 +80,7 @@ export default function CardTheater({ ids, title = "Your battle lineup", onDone,
   // The lineup is immutable for a mounted showcase; transitions use refs to preserve its renderer.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const card=cardById(ids[index]);
+  const card=look(index);
   return <div ref={dialog} className="theater" role="dialog" aria-modal="true" aria-label={title}>
     <div className="theater-aurora"/>
     <header className="theater-header"><div><span className="eyebrow">{pack?"A NEW DISCOVERY":inspection?"THE COLLECTION":"BEFORE THE BATTLE"}</span><h2>{title}</h2></div><button autoFocus className="round-button light" onClick={onDone} aria-label={pack?"Collect all cards":inspection?"Close card":"Skip showcase"}><X size={20}/></button></header>
@@ -84,6 +88,6 @@ export default function CardTheater({ ids, title = "Your battle lineup", onDone,
     {failed&&<img className="theater-fallback" src={card.src} alt={card.name}/>}
     <div className="theater-bottom"><div className="card-rarity"><Sparkles size={13}/>{card.rarity}</div><h2>{card.name}</h2><div className="theater-pagination"><button className="round-button light" disabled={index===0} aria-label="Previous card" onClick={()=>{setAuto(false);setIndex(index-1);}}><ChevronLeft size={19}/></button><span>{String(index+1).padStart(2,"0")} <i>/ {String(ids.length).padStart(2,"0")}</i></span><button className="round-button light" disabled={index===ids.length-1} aria-label="Next card" onClick={()=>{setAuto(false);setIndex(index+1);}}><ChevronRight size={19}/></button></div>
     {!inspection&&<button className="primary-button theater-enter" onClick={()=>pack&&index<ids.length-1?setIndex(index+1):onDone()}>{pack?index===ids.length-1?"Add to collection":"Reveal next card":index===ids.length-1?"Enter the arena":"Skip to battle"}<ArrowRight size={17}/></button>}</div>
-    <div className="theater-progress">{ids.map((id,i)=><button key={`${id}-${i}`} aria-label={`Show ${cardById(id).name}`} className={i===index?"current":i<index?"seen":""} onClick={()=>{setAuto(false);setIndex(i);}}/>)}</div>
+    <div className="theater-progress">{ids.map((id,i)=><button key={`${id}-${i}`} aria-label={`Show ${look(i).name}`} className={i===index?"current":i<index?"seen":""} onClick={()=>{setAuto(false);setIndex(i);}}/>)}</div>
   </div>;
 }

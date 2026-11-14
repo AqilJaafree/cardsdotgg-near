@@ -707,3 +707,59 @@ body:has(.game-menu) .modal-backdrop{z-index:260}
 .new-creature b { font: 400 20px "Lilita One", system-ui, sans-serif; }
 .new-creature small { font-size: 12px; color: #6b4423; }
 .new-badge.inline { position: static; align-self: flex-start; animation: none; }
+
+/* ── Collection type pass ──────────────────────────────────────────────
+   Same two-font system as the rest of the game: Lilita One (display, 400 only — never fake-bold it)
+   for names, labels, tabs and badges; Inter for running text. Nothing below 10px. */
+.collection-page{font-family:Inter,system-ui,sans-serif}
+.collection-page .eyebrow{font:400 13px/1 "Lilita One",system-ui,sans-serif;letter-spacing:.12em;text-shadow:0 2px 0 #3b1d0e}
+.collection-page .arena-heading p{font:500 15px/1.45 Inter,system-ui,sans-serif}
+.collection-stats span{font:400 12px/1.2 "Lilita One",system-ui,sans-serif!important;letter-spacing:.08em}
+.collection-stats b small{font:400 15px "Lilita One",system-ui,sans-serif;color:#8a5a2e!important}
+.collection-stats p{font:500 13px/1.5 Inter,system-ui,sans-serif!important}
+.collection-tabs button{font-weight:400!important;font-size:15px!important;letter-spacing:.04em}
+.collection-page .card-search input{font:500 15px Inter,system-ui,sans-serif}
+.collection-subbar span{font:400 15px "Lilita One",system-ui,sans-serif;letter-spacing:.03em}
+.collection-subbar label{font:600 13px Inter,system-ui,sans-serif}
+.collection-card>div b{font:400 17px/1.15 "Lilita One",system-ui,sans-serif;letter-spacing:.02em;text-shadow:0 2px 0 #3b1d0e}
+.collection-card>div span{font:400 13px "Lilita One",system-ui,sans-serif!important;color:#bfa9e0!important;letter-spacing:.04em}
+.collection-card small{font:600 12px Inter,system-ui,sans-serif;letter-spacing:.01em}
+.collection-page .owned-count,.collection-page .uncollected{font:400 11px/1 "Lilita One",system-ui,sans-serif!important;letter-spacing:.05em;padding:4px 7px!important;bottom:6px!important;right:6px!important;border-radius:6px!important}
+.collection-page .empty-collection h2{font:400 26px "Lilita One",system-ui,sans-serif}
+@media (max-width:640px){
+  .collection-tabs button{font-size:14px!important}
+  .collection-card>div b{font-size:15px}
+  .collection-card>div span{font-size:12px!important}
+  .collection-card small{font-size:11px}
+  .collection-stats span{font-size:10px!important}
+  .collection-page .owned-count,.collection-page .uncollected{font-size:10px!important;padding:3px 6px!important;bottom:4px!important;right:4px!important}
+}
+@media (min-width:641px){.collection-stats span{white-space:nowrap}}
+
+/* ── Season pack ─────────────────────────────────────────────────────── */
+.pack-type-tabs .season-tab{position:relative;background:linear-gradient(180deg,#f4fbff 0 50%,#cfe8fb 50% 100%)!important;color:#1f3d5a!important}
+.pack-type-tabs .season-tab.selected{background:linear-gradient(180deg,#bfe6ff 0 50%,#4aa3e8 50% 100%)!important;color:#fff!important}
+.pack-type-tabs .season-tab i{position:absolute;top:-10px;right:-8px;font:400 10px/1 "Lilita One",system-ui,sans-serif;font-style:normal;letter-spacing:.06em;padding:3px 6px;border-radius:999px;border:2px solid #3b1d0e;background:linear-gradient(#ffe27a,#f29a1d);color:#fff;text-shadow:0 1px 0 #3b1d0e}
+.season-banner{margin:4px auto 0;width:max-content;max-width:calc(100% - 32px);padding:7px 14px;border-radius:12px;border:3px solid #3b1d0e;box-shadow:0 3px 0 #3b1d0e;font:500 14px Inter,system-ui,sans-serif;color:#1f3d5a;background:#eaf6ff;text-align:center}
+.season-banner b{font:400 15px "Lilita One",system-ui,sans-serif;letter-spacing:.03em}
+.season-banner.live{background:linear-gradient(180deg,#f4fbff,#cfe8fb)}
+.season-banner.ended,.season-banner.none{background:#efe6da;color:#6b4423}
+.trial-tag.season-tag{background:#e3f3ff;border-color:#7cc0f0;color:#1f4f7a}
+
+/* ── Tokenized physical cards (RWA) ──────────────────────────────────── */
+.rwa-pull{display:flex;gap:14px;align-items:center;margin:14px auto;max-width:520px;padding:12px;border:3px solid #3b1d0e;border-radius:16px;background:linear-gradient(180deg,#f4fbff,#d9eefc);box-shadow:0 4px 0 #3b1d0e;text-align:left}
+.rwa-pull img{width:120px;border-radius:8px;border:2px solid #3b1d0e}
+.rwa-pull b{display:block;font:400 22px "Lilita One",system-ui,sans-serif;color:#1f3d5a;margin:4px 0}
+.rwa-pull small{font:500 13px/1.4 Inter,system-ui,sans-serif;color:#2b4a66!important}
+
+/* ── Season tab in the collection: same cards and shine as the base grid ── */
+.collection-tabs button.season-tab{position:relative;background:linear-gradient(180deg,#f4fbff 0 50%,#cfe8fb 50% 100%)!important;color:#1f3d5a!important}
+.collection-tabs button.season-tab.selected{background:linear-gradient(180deg,#bfe6ff 0 50%,#4aa3e8 50% 100%)!important;color:#fff!important}
+.collection-tabs button.season-tab i{position:absolute;top:-10px;right:-8px;font:400 10px/1 "Lilita One",system-ui,sans-serif;font-style:normal;letter-spacing:.06em;padding:3px 6px;border-radius:999px;border:2px solid #3b1d0e;background:linear-gradient(#ffe27a,#f29a1d);color:#fff!important;text-shadow:0 1px 0 #3b1d0e}
+.collection-tabs{padding-top:8px}
+.season-cell{display:flex;flex-direction:column;gap:8px;min-width:0}
+.season-cell>.collection-card{width:100%}
+.season-actions{display:flex;gap:6px}
+.season-actions button{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:4px;padding:6px 4px;border:2px solid #3b1d0e;border-radius:10px;background:linear-gradient(180deg,#f6e2b6 0 50%,#ddbf86 50% 100%);box-shadow:0 2px 0 #3b1d0e;font:400 13px "Lilita One",system-ui,sans-serif;color:#5a2e12}
+.season-actions button:active{transform:translateY(2px);box-shadow:none}
+.collection-page .season-msg{margin:0 0 14px;padding:8px 12px;border:2px solid #3b1d0e;border-radius:10px;background:#eaf6ff;color:#1f4f7a!important;font:600 13px Inter,system-ui,sans-serif}

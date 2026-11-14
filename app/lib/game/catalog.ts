@@ -2,6 +2,9 @@ import data from "./card-catalog.json";
 
 export type ReferenceCard = { id: number; name: string; src: string; rarity: string; category: string };
 export const catalog = data as ReferenceCard[];
+/** The limited-time season pack: one tokenized physical White Flare card per pack. The cover is a photo of the booster
+ *  the physical cards came from. */
+export const SEASON = { name: "White Flare", color: "#8fd3ff", pack: "/cards/wf-token/wf.jpg" } as const;
 export const cardById = (id: number): ReferenceCard => catalog.find((card) => card.id === id) ?? catalog[0];
 export const decks = [
   { name: "Guardian", subtitle: "Rooted in resilience", color: "#39a979", symbol: "leaf", cards: [15, 2, 1, 3, 13, 17, 30, 44], pack: "/cards/pack-guardian.svg" },

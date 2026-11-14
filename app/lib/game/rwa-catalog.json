@@ -1,0 +1,186 @@
+[
+  {
+    "id": 0,
+    "name": "Cottonee",
+    "set": "SV11W",
+    "number": 4,
+    "src": "/cards/wf-token/Cottonee.SV11W.4.57737.jpeg",
+    "card": "SV11W 004 Cottonee"
+  },
+  {
+    "id": 1,
+    "name": "Sawsbuck",
+    "set": "SV11W",
+    "number": 7,
+    "src": "/cards/wf-token/Sawsbuck.SV11W.7.57740.jpeg",
+    "card": "SV11W 007 Sawsbuck"
+  },
+  {
+    "id": 2,
+    "name": "Tepig",
+    "set": "SV11W",
+    "number": 11,
+    "src": "/cards/wf-token/Tepig.SV11W.11.57197.jpeg",
+    "card": "SV11W 011 Tepig"
+  },
+  {
+    "id": 3,
+    "name": "Pignite",
+    "set": "SV11W",
+    "number": 12,
+    "src": "/cards/wf-token/Pignite.SV11W.12.57198.jpeg",
+    "card": "SV11W 012 Pignite"
+  },
+  {
+    "id": 4,
+    "name": "Dewott",
+    "set": "SV11W",
+    "number": 19,
+    "src": "/cards/wf-token/Dewott.SV11W.19.57204.jpeg",
+    "card": "SV11W 019 Dewott"
+  },
+  {
+    "id": 5,
+    "name": "Basculin",
+    "set": "SV11W",
+    "number": 21,
+    "src": "/cards/wf-token/Basculin.SV11W.21.57747.jpeg",
+    "card": "SV11W 021 Basculin"
+  },
+  {
+    "id": 6,
+    "name": "Swanna",
+    "set": "SV11W",
+    "number": 23,
+    "src": "/cards/wf-token/Swanna.SV11W.23.57749.jpeg",
+    "card": "SV11W 023 Swanna"
+  },
+  {
+    "id": 7,
+    "name": "Blitzle",
+    "set": "SV11W",
+    "number": 28,
+    "src": "/cards/wf-token/Blitzle.SV11W.28.57754.jpeg",
+    "card": "SV11W 028 Blitzle"
+  },
+  {
+    "id": 8,
+    "name": "Yamask",
+    "set": "SV11W",
+    "number": 36,
+    "src": "/cards/wf-token/Yamask.SV11W.36.57760.jpeg",
+    "card": "SV11W 036 Yamask"
+  },
+  {
+    "id": 9,
+    "name": "Gothita",
+    "set": "SV11W",
+    "number": 38,
+    "src": "/cards/wf-token/Gothita.SV11W.38.57762.jpeg",
+    "card": "SV11W 038 Gothita"
+  },
+  {
+    "id": 10,
+    "name": "Gothitelle",
+    "set": "SV11W",
+    "number": 40,
+    "src": "/cards/wf-token/Gothitelle.SV11W.40.57764.jpeg",
+    "card": "SV11W 040 Gothitelle"
+  },
+  {
+    "id": 11,
+    "name": "Gigalith",
+    "set": "SV11W",
+    "number": 45,
+    "src": "/cards/wf-token/Gigalith.SV11W.45.57767.jpeg",
+    "card": "SV11W 045 Gigalith"
+  },
+  {
+    "id": 12,
+    "name": "Mienfoo",
+    "set": "SV11W",
+    "number": 49,
+    "src": "/cards/wf-token/Mienfoo.SV11W.49.57771.jpeg",
+    "card": "SV11W 049 Mienfoo"
+  },
+  {
+    "id": 13,
+    "name": "Scrafty",
+    "set": "SV11W",
+    "number": 55,
+    "src": "/cards/wf-token/Scrafty.SV11W.55.57777.jpeg",
+    "card": "SV11W 055 Scrafty"
+  },
+  {
+    "id": 14,
+    "name": "Zorua",
+    "set": "SV11W",
+    "number": 58,
+    "src": "/cards/wf-token/Zorua.SV11W.58.57246.jpeg",
+    "card": "SV11W 058 Zorua"
+  },
+  {
+    "id": 15,
+    "name": "Ferroseed",
+    "set": "SV11W",
+    "number": 63,
+    "src": "/cards/wf-token/Ferroseed.SV11W.63.57783.jpeg",
+    "card": "SV11W 063 Ferroseed"
+  },
+  {
+    "id": 16,
+    "name": "Ferrothorn",
+    "set": "SV11W",
+    "number": 64,
+    "src": "/cards/wf-token/Ferrothorn.SV11W.64.57784.jpeg",
+    "card": "SV11W 064 Ferrothorn"
+  },
+  {
+    "id": 17,
+    "name": "Klang",
+    "set": "SV11W",
+    "number": 66,
+    "src": "/cards/wf-token/Klang.SV11W.66.57786.jpeg",
+    "card": "SV11W 066 Klang"
+  },
+  {
+    "id": 18,
+    "name": "Durant",
+    "set": "SV11W",
+    "number": 68,
+    "src": "/cards/wf-token/Durant.SV11W.68.57788.jpeg",
+    "card": "SV11W 068 Durant"
+  },
+  {
+    "id": 19,
+    "name": "Patrat",
+    "set": "SV11W",
+    "number": 70,
+    "src": "/cards/wf-token/Patrat.SV11W.70.57790.jpeg",
+    "card": "SV11W 070 Patrat"
+  },
+  {
+    "id": 20,
+    "name": "Herdier",
+    "set": "SV11W",
+    "number": 73,
+    "src": "/cards/wf-token/Herdier.SV11W.73.57195.jpeg",
+    "card": "SV11W 073 Herdier"
+  },
+  {
+    "id": 21,
+    "name": "Antique Plume Fossil",
+    "set": "SV11W",
+    "number": 81,
+    "src": "/cards/wf-token/Antique-Plume-Fossil.SV11W.81.57797.jpeg",
+    "card": "SV11W 081 Antique Plume Fossil"
+  },
+  {
+    "id": 22,
+    "name": "Harlequin",
+    "set": "SV11W",
+    "number": 83,
+    "src": "/cards/wf-token/Harlequin.SV11W.83.57799.jpeg",
+    "card": "SV11W 083 Harlequin"
+  }
+]

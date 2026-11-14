@@ -1,7 +1,9 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
-import { decks } from "@/lib/game/catalog";
+import { SEASON, decks } from "@/lib/game/catalog";
+/** Pack art by tab: the three deck packs, then the season pack. */
+const PACKS = [...decks.map((d) => d.pack), SEASON.pack];
 import { cardMesh, disposeScene, loadTexture, smooth } from "@/lib/game/three-utils";
 export type PackPhase="choose"|"sealed"|"opening";
 export default function PackScene({tier,phase,selected,onSelect}:{tier:number;phase:PackPhase;selected:number;onSelect:(id:number)=>void}){
@@ -14,7 +16,7 @@ export default function PackScene({tier,phase,selected,onSelect}:{tier:number;ph
     try{renderer=new THREE.WebGLRenderer({antialias:true,alpha:true,powerPreference:"high-performance"});}catch{setFailed(true);return;}
     renderer.setPixelRatio(Math.min(devicePixelRatio,2));el.appendChild(renderer.domElement);
     const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(40,1,.1,80);camera.position.set(0,.15,10);
-    const loader=new THREE.TextureLoader(),textures=decks.map(d=>loadTexture(loader,d.pack)),back=loadTexture(loader,"/cards/back.svg");
+    const loader=new THREE.TextureLoader(),textures=PACKS.map(p=>loadTexture(loader,p)),back=loadTexture(loader,"/cards/back.svg");
     const packs:THREE.Group[]=[],reflections:THREE.Group[]=[];
     for(let i=0;i<10;i++){
       const pack=cardMesh(textures[0],back,2.15,3.44);pack.userData.index=i;scene.add(pack);packs.push(pack);
@@ -61,5 +63,5 @@ export default function PackScene({tier,phase,selected,onSelect}:{tier:number;ph
     };frame=requestAnimationFrame(animate);
     return()=>{cancelAnimationFrame(frame);observer.disconnect();el.removeEventListener("pointerdown",pointerDown);el.removeEventListener("pointermove",pointerMove);el.removeEventListener("pointerup",pointerUp);el.removeEventListener("pointercancel",pointerUp);disposeScene(scene);[...textures,...capTexture,...lowerTexture,back].forEach(t=>t.dispose());renderer.dispose();renderer.domElement.remove();};
   },[]);
-  return <div ref={host} className={`pack-scene ${phase}`} role="img" aria-label="Rotating 3D booster packs. Use the previous and next pack buttons to choose.">{failed&&<img src={decks[tier].pack} alt={`${decks[tier].name} booster pack`} className={`pack-fallback ${phase}`}/>}</div>;
+  return <div ref={host} className={`pack-scene ${phase}`} role="img" aria-label="Rotating 3D booster packs. Use the previous and next pack buttons to choose.">{failed&&<img src={PACKS[tier]} alt={`${decks[tier]?.name??SEASON.name} booster pack`} className={`pack-fallback ${phase}`}/>}</div>;
 }

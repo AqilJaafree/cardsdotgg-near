@@ -29,7 +29,7 @@ export const RETREAT_COST = 1;
 
 /** A deck as the contract stores it: 8 creature ids in play order and an art skin for each (0 = default face). */
 export type DeckCardsJson = { cards: number[]; art: number[]; custom: boolean };
-export const ART_MAX = 102;
+export const ART_MAX = 126; // base pictures 1..=102, season pictures 103..=126
 /**
  * The picture a creature shows when no art is chosen (art 0): the card from its own deck's art. The starter deck of
  * each tier shows exactly the cards on the deck carousel, so what you pick in the deposit screen is what you see here.

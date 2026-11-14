@@ -12,10 +12,16 @@ export type CollectionJson = { creatures: number[]; pictures: number[]; opened: 
 export const STARTER_PICS = new Set<number>(decks.flatMap((d) => [...d.cards]));
 
 /** Max-HP perk, in percent, of a picture unlocked from a pack. Mirrors `hp_bonus_pct` in near/game/src/collection.rs. */
-export const hpBonus = (pic: number) => (pic >= 1 && pic <= 22 ? 5 : pic >= 23 && pic <= 42 ? 2 : 0);
+export const hpBonus = (pic: number) => ((pic >= 1 && pic <= 22) || (pic >= 103 && pic <= 108) ? 5 : (pic >= 23 && pic <= 42) || (pic >= 109 && pic <= 116) ? 2 : 0);
 
 /** The rarity the game uses for a picture (same bands as the contract), which decides its perk. */
-export const rarityName = (pic: number) => (pic >= 1 && pic <= 22 ? "Rare" : pic >= 23 && pic <= 42 ? "Uncommon" : "Common");
+export const rarityName = (pic: number) => {
+  const band = (pic >= 1 && pic <= 22) || (pic >= 103 && pic <= 108) ? "Rare" : (pic >= 23 && pic <= 42) || (pic >= 109 && pic <= 116) ? "Uncommon" : "Common";
+  return pic >= 103 ? `Season ${band}` : band;
+};
+
+/** The season as the contract reports it (`get_season`), times in unix seconds. */
+export type SeasonJson = { name: string; start: number; end: number; now: number; open: boolean };
 
 /** The player's onchain collection: pictures and creatures unlocked from packs. */
 export function useCollection() {

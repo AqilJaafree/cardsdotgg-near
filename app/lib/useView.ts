@@ -43,13 +43,14 @@ async function pollHeight() {
 }
 
 /** Latest block height, for "wait for the seed block". */
-export function useBlockHeight(interval = 3000) {
+export function useBlockHeight(interval = 3000, enabled = true) {
   const [h, setH] = useState<bigint | undefined>(heightNow);
   useEffect(() => {
+    if (!enabled) return; // nobody needs the height, so do not poll for it
     heightSubs.add(setH);
     if (heightSubs.size === 1) { pollHeight(); heightTimer = setInterval(pollHeight, interval); }
     else if (heightNow !== undefined) setH(heightNow);
     return () => { heightSubs.delete(setH); if (!heightSubs.size && heightTimer) { clearInterval(heightTimer); heightTimer = undefined; } };
-  }, [interval]);
+  }, [interval, enabled]);
   return h;
 }

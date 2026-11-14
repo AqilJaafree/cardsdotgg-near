@@ -30,7 +30,7 @@ export async function newSessionKey(): Promise<SessionKey> {
 /** The wallet action that adds the session key to the player's account. */
 export const addKeyAction = (publicKey: string, contractId: string) => ({
   type: "AddKey" as const,
-  params: { publicKey, accessKey: { permission: { receiverId: contractId, allowance: SESSION_ALLOWANCE, methodNames: SESSION_METHODS } } },
+  params: { publicKey, accessKey: { nonce: 0, permission: { receiverId: contractId, allowance: SESSION_ALLOWANCE, methodNames: SESSION_METHODS } } },
 });
 export const deleteKeyAction = (publicKey: string) => ({ type: "DeleteKey" as const, params: { publicKey } });
 

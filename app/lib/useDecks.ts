@@ -9,9 +9,10 @@ export type DeckView = { id: bigint; tier: number; asset: number; principal: big
 
 const svgCache = new Map<string, string>();
 
-export function useDecks() {
+/** `poll` false stops the refresh timer (for screens, like a live battle, that do not show the decks). */
+export function useDecks(poll = true) {
   const { accountId } = useWallet();
-  const res = useView<DeckJson[]>(A.game, "decks_of", accountId ? { account_id: accountId } : undefined, { enabled: !!accountId && !!A.game, interval: 8000 });
+  const res = useView<DeckJson[]>(A.game, "decks_of", accountId ? { account_id: accountId } : undefined, { enabled: !!accountId && !!A.game, interval: poll ? 20000 : undefined });
   const decks: DeckView[] = (res.data ?? []).map((d) => ({
     id: BigInt(d.id), tier: d.tier, asset: d.asset, principal: BigInt(d.principal), valueUsd: BigInt(d.deposit_value_usd),
     retired: d.retired, available: BigInt(d.available), locked: BigInt(d.locked), seeded: BigInt(d.seeded),

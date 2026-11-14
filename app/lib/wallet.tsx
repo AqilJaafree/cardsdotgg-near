@@ -1,5 +1,5 @@
 "use client";
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { NearConnector } from "@hot-labs/near-connect";
 import { NETWORK_ID, RPC_URLS } from "./chain";
 import { SESSION_GAS, SESSION_METHODS, addKeyAction, callWithKey, deleteKeyAction, keyIsLive, keyProblem, newSessionKey, type SessionKey } from "./session-core";
@@ -60,6 +60,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   const [sess, setSess] = useState<SessionKey | null>(null);
   const [sessBusy, setSessBusy] = useState(false);
   const [sessError, setSessError] = useState<string | null>(null);
+  const bundleBroken = useRef(false); // set once a wallet fails on a bundled add/remove-key approval, so we stop bundling
   const sessStore = (id: string) => `cardsdotgg.session.${A.game}.${id}`;
   const readStored = (id: string): SessionKey | null => { try { const v = JSON.parse(localStorage.getItem(sessStore(id)) ?? "null"); return v?.privateKey && v?.publicKey ? v : null; } catch { return null; } };
   const writeStored = (id: string, v: SessionKey | null) => { try { if (v) localStorage.setItem(sessStore(id), JSON.stringify(v)); else localStorage.removeItem(sessStore(id)); } catch { /* storage may be blocked */ } };
@@ -82,7 +83,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       const { NearConnector } = await import("@hot-labs/near-connect");
       const c = new NearConnector({
         network: NETWORK_ID,
-        providers: { mainnet: ["https://free.rpc.fastnear.com"], testnet: ["https://test.rpc.fastnear.com"] },
+        providers: { mainnet: ["https://free.rpc.fastnear.com"], testnet: RPC_URLS }, // a second endpoint to fall back on when one rate-limits
       });
       const onIn = (p: { wallet: ConnectedWallet; accounts: { accountId: string }[] }) => {
         if (cancelled) return;
@@ -174,13 +175,22 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   const startWith = useCallback<Ctx["session"]["startWith"]>(async (c) => {
     if (!wallet || !accountId) throw new Error("Wallet is not connected");
     if (sess) return call(c);
+    if (bundleBroken.current) return call(c); // this wallet could not read the bundled add-key approval earlier
     setSessBusy(true); setSessError(null);
     const key = await newSessionKey();
     writeStored(accountId, key); // saved first: a redirecting wallet reloads the page before this returns
     let outs: Outcome[] | undefined;
     try {
       outs = (await wallet.signAndSendTransactions({ transactions: [{ receiverId: accountId, actions: [addKeyAction(key.publicKey, A.game)] }, buildTx(c)] })) as unknown as Outcome[] | undefined;
-    } catch (e) { writeStored(accountId, null); setSessBusy(false); throw e; }
+    } catch (e) {
+      writeStored(accountId, null); setSessBusy(false);
+      const m = e instanceof Error ? e.message : String(e);
+      if (/user (rejected|closed|cancel)|closed|cancel|reject|denied/i.test(m)) throw e; // the player said no: stop here
+      // The wallet could not handle the bundled approval. Quick play is optional, so play on without it.
+      bundleBroken.current = true;
+      setSessError("Quick play couldn’t start with this wallet, so moves will ask for approval.");
+      return call(c);
+    }
     if (!outs) { setSessBusy(false); return {}; } // redirected away; the key is picked up when the page comes back
     const result = { hash: outs[outs.length - 1]?.transaction?.hash, failure: outs.map(failureOf).find(Boolean) };
     let live = false;
@@ -193,13 +203,33 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     if (!wallet || !accountId) throw new Error("Wallet is not connected");
     if (!sess) return c ? call(c) : {};
     setSessBusy(true); setSessError(null);
+    const rejected = (e: unknown) => /user (rejected|closed|cancel)|closed|cancel|reject|denied/i.test(e instanceof Error ? e.message : String(e));
+    const forget = () => { setSess(null); writeStored(accountId, null); };
     try {
-      const txs = [...(c ? [buildTx(c)] : []), { receiverId: accountId, actions: [deleteKeyAction(sess.publicKey)] }];
-      const outs = (await wallet.signAndSendTransactions({ transactions: txs })) as unknown as Outcome[] | undefined;
-      setSess(null); writeStored(accountId, null);
-      if (!outs) return {};
-      return { hash: outs[0]?.transaction?.hash, failure: outs.map(failureOf).find(Boolean) };
-    } finally { setSessBusy(false); } // declined: nothing changed, the session keeps running
+      // Preferred: one approval that claims and removes the key. Some wallets (Meteor) cannot read the remove-key step.
+      if (!bundleBroken.current) {
+        try {
+          const txs = [...(c ? [buildTx(c)] : []), { receiverId: accountId, actions: [deleteKeyAction(sess.publicKey)] }];
+          const outs = (await wallet.signAndSendTransactions({ transactions: txs })) as unknown as Outcome[] | undefined;
+          forget();
+          if (!outs) return {};
+          return { hash: outs[0]?.transaction?.hash, failure: outs.map(failureOf).find(Boolean) };
+        } catch (e) {
+          if (rejected(e)) throw e; // the player said no: nothing changed, the session keeps running
+          bundleBroken.current = true;
+        }
+      }
+      // Fallback: claim on its own first (that is what the player asked for), then try to remove the key separately.
+      const result = c ? await call(c) : {};
+      if (result.failure) return result;
+      try {
+        await wallet.signAndSendTransaction({ receiverId: accountId, actions: [deleteKeyAction(sess.publicKey)] });
+        forget();
+      } catch (e) {
+        if (!rejected(e)) setSessError("Rewards claimed. This wallet couldn’t remove the quick-play key, so quick play is still on.");
+      }
+      return result;
+    } finally { setSessBusy(false); }
   }, [wallet, accountId, sess, call]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const session = useMemo(() => ({ active: !!sess, busy: sessBusy, error: sessError, enable: enableSession, disable: disableSession, startWith, endWith }), [sess, sessBusy, sessError, enableSession, disableSession, startWith, endWith]);

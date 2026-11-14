@@ -102,6 +102,8 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     })().catch((e) => { console.error("near-connect failed", e); setError(`Wallet failed to load: ${e instanceof Error ? e.message : String(e)}`); });
     const onRej = (ev: PromiseRejectionEvent) => {
       const msg = String(ev.reason?.message ?? ev.reason ?? "");
+      // Closing or declining the wallet window is the player's choice, not an error worth a banner.
+      if (/user (rejected|closed|cancel)|closed the window|cancel|reject|denied/i.test(msg)) return;
       if (/wallet|meteor|popup|near|sign/i.test(msg)) setError(msg.slice(0, 300));
     };
     window.addEventListener("unhandledrejection", onRej);

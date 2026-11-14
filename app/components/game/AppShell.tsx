@@ -3,13 +3,13 @@ import Link from "next/link";
 import {usePathname} from "next/navigation";
 import {useWallet} from "@/lib/wallet";
 import {useState} from "react";
-import {ArrowUpRight,ChevronDown,Hexagon,Layers,Package,Swords,Vault,Wallet,X} from "lucide-react";
+import {ArrowUpRight,ChevronDown,Gamepad2,Hexagon,Layers,Store,Swords,Vault,Wallet,X} from "lucide-react";
 import {NetworkGuard} from "@/components/NetworkGuard";
-const links=[{href:"/",name:"Arena",icon:Swords},{href:"/collection",name:"Collection",icon:Layers},{href:"/packs",name:"Packs",icon:Package},{href:"/decks",name:"Vault",icon:Vault}];
+const links=[{href:"/",name:"Arena",icon:Swords},{href:"/arcade",name:"Arcade",icon:Gamepad2},{href:"/market",name:"Market",icon:Store},{href:"/collection",name:"Collection",icon:Layers},{href:"/decks",name:"Vault",icon:Vault}];
 export default function AppShell({children}:{children:React.ReactNode}){
   const path=usePathname(),game=path==="/"||path==="/collection"||path==="/packs";
   // Full-screen game pages carry their own styles, so they skip the old legacy theme.
-  const screens=["/deposit","/decks","/decks/build","/withdraw","/pool","/arena","/play","/leaderboard"].includes(path);
+  const screens=["/deposit","/decks","/decks/build","/withdraw","/pool","/arena","/play","/leaderboard","/arcade","/market"].includes(path);
   const {accountId,ready,signIn:login,signOut:logout}=useWallet();
   const address=accountId,isConnected=!!accountId,authenticated=!!accountId||path==="/";
   const [walletOpen,setWalletOpen]=useState(false);

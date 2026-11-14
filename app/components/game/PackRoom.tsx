@@ -2,7 +2,7 @@
 import {useEffect,useRef,useState} from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import {ArrowRight,ChevronLeft,ChevronRight,Gift,Layers,RotateCcw,Scissors,Sparkles,Volume2,VolumeX} from "lucide-react";
+import {ArrowRight,ChevronLeft,ChevronRight,Gamepad2,Gift,Layers,RotateCcw,Scissors,Sparkles,Volume2,VolumeX} from "lucide-react";
 import {SEASON,cardById,catalog,decks} from "@/lib/game/catalog";
 import CreatureCard from "./CreatureCard";
 import {readable} from "@/components/TxButton";
@@ -14,6 +14,8 @@ import {useWallet} from "@/lib/wallet";
 import type {CollectionJson,SeasonJson} from "@/lib/game/useCollection";
 import {useView} from "@/lib/useView";
 import {rwaCard,useRwaStock,type RwaTokenJson} from "@/lib/game/rwa";
+import {landed,useTickets} from "@/lib/game/arcade";
+import {isCancel} from "@/components/TxButton";
 import {enableSound,sound} from "@/lib/game/sound";
 const PackScene=dynamic(()=>import("./PackScene"),{ssr:false});
 /** The season pack sits after the three deck packs. */
@@ -35,6 +37,10 @@ export default function PackRoom(){
   const soldOut=!!stock.data&&left_===0;
   const blocked=isSeason&&(seasonState!=="live"||soldOut);
   const [physical,setPhysical]=useState<RwaTokenJson|null>(null);
+  // Packs open with arcade tickets: Pack Tickets (free Stacker) for trial packs, Season Tickets (Claw) for White Flare.
+  const tk=useTickets();const have=isSeason?tk.season:(tk.t?.pack??0);const noTicket=tk.loaded&&have<=0;
+  // The market links here with ?tab=season.
+  useEffect(()=>{if(new URLSearchParams(location.search).get("tab")==="season")setTier(SEASON_TAB);},[]);
   const timer=useRef<ReturnType<typeof setTimeout>>(),opening=useRef(false),saved=useRef(false),swipe=useRef(0);
   useEffect(()=>()=>clearTimeout(timer.current),[]);
   /** Buy a pack (2 tUSD to the game contract), wait for the chain to record it, then show what came out. */
@@ -45,21 +51,28 @@ export default function PackRoom(){
     try{
       const myTokens=()=>view<RwaTokenJson[]>(A.game,"rwa_tokens_of",{account_id:accountId});
       const hadTokens=isSeason?new Set((await myTokens()).map(t=>t.id)):new Set<number>();
-      // Trial packs are free (only gas); the season pack costs 2 tUSD because it holds a real physical card.
-      const r=await call(isSeason?{receiverId:A.tusd,methodName:"ft_transfer_call",args:{receiver_id:A.game,amount:"2000000",msg:JSON.stringify({action:"season_pack"})},deposit:ONE_YOCTO,gas:TGAS(60)}:{receiverId:A.game,methodName:"open_pack",args:{},gas:TGAS(30)});
-      if(r.failure)throw new Error(r.failure);
+      const opened0=isSeason?0:(await view<CollectionJson>(A.game,"get_collection",{account_id:accountId})).opened;
+      // Each pack uses one arcade ticket: open_pack takes a Pack Ticket, open_season_pack a Season Ticket.
+      // The wallet's answer is only a hint: some wallets report "closed" even after sending, so the chain decides below.
+      let walletErr="";
+      try{const r=await call({receiverId:A.game,methodName:isSeason?"open_season_pack":"open_pack",args:{},gas:TGAS(isSeason?50:30)});if(r.failure)walletErr=r.failure;}
+      catch(e){walletErr=(e as Error)?.message??String(e);}
+      // A contract refusal (no ticket, sold out…) is final; anything else, check whether the pack really opened.
+      if(/Smart contract panicked/.test(walletErr))throw new Error(walletErr);
+      const tries=walletErr&&isCancel(walletErr)?6:14;
       if(isSeason){
-        // A season pack holds one physical card and nothing else: wait for the new token to show up.
         let got:RwaTokenJson|undefined;
-        for(let i=0;i<14&&!got;i++){got=(await myTokens()).find(t=>!hadTokens.has(t.id));if(!got)await new Promise(res=>setTimeout(res,900));}
-        if(!got)throw new Error("Your card has not shown up yet. Check your collection in a moment.");
+        await landed(async()=>!!(got=(await myTokens()).find(t=>!hadTokens.has(t.id))),tries);
+        tk.refetch();
+        if(!got)throw new Error(walletErr||"Your card has not shown up yet. Check your collection in a moment.");
         setPhysical(got);stock.refetch();
         timer.current=setTimeout(()=>{setPhase("reveal");sound("rare");},Math.max(0,1450-(Date.now()-t0)));
         return;
       }
       let c:CollectionJson|undefined;
-      for(let i=0;i<14;i++){c=await view<CollectionJson>(A.game,"get_collection",{account_id:accountId});if(c.opened>before)break;await new Promise(res=>setTimeout(res,900));}
-      if(!c||c.opened<=before||!c.last_pack)throw new Error("Your pack has not shown up yet. Check again in a moment.");
+      await landed(async()=>{c=await view<CollectionJson>(A.game,"get_collection",{account_id:accountId});return c.opened>opened0;},tries);
+      tk.refetch();
+      if(!c||c.opened<=opened0||!c.last_pack)throw new Error(walletErr||"Your pack has not shown up yet. Check again in a moment.");
       setPulled(c.last_pack.pictures);setFresh([...new Set(c.last_pack.pictures)].filter(id=>!hadPics.has(id)));
       setNewCreature(hadCreatures.has(c.last_pack.creature)?null:c.last_pack.creature);
       col.refetch();
@@ -71,7 +84,7 @@ export default function PackRoom(){
   function collect(){setPhase("summary");col.refetch();}
   function reset(){clearTimeout(timer.current);opening.current=false;saved.current=false;setPhysical(null);setPulled([]);setFresh([]);setNewCreature(null);setErr("");setPhase("choose");}
   return <div className={`pack-room pack-phase-${phase}`}>
-    <div className="pack-room-top"><div className="arena-heading-actions"><span className="local-badge"><Gift size={13}/>{isSeason?"2 tUSD per pack":"Free trial packs"}</span><button className="round-button" aria-label={audio?"Mute sound":"Enable sound"} onClick={()=>{setAudio(!audio);enableSound(!audio);}}>{audio?<Volume2 size={17}/>:<VolumeX size={17}/>}</button></div></div>
+    <div className="pack-room-top"><div className="arena-heading-actions"><span className="local-badge"><Gift size={13}/>{isSeason?`${tk.season} Season ${tk.season===1?"Ticket":"Tickets"}`:`${tk.t?.pack??0} Pack ${tk.t?.pack===1?"Ticket":"Tickets"}`}</span><button className="round-button" aria-label={audio?"Mute sound":"Enable sound"} onClick={()=>{setAudio(!audio);enableSound(!audio);}}>{audio?<Volume2 size={17}/>:<VolumeX size={17}/>}</button></div></div>
     {phase!=="summary"&&phase!=="reveal"&&<><div className="pack-title"><span className="eyebrow"><Sparkles size={13}/>THE PACK ROOM</span><h1>{phase==="sealed"?"A little anticipation.":phase==="opening"?"Here comes the magic.":"What’s waiting inside?"}</h1><p>{phase==="sealed"?"Swipe across the seal, or tap Open.":"Pick a pack, then break the seal."}</p></div>
       <div className="pack-type-tabs">{decks.map((d,i)=><button key={d.name} className={i===tier?"selected":""} disabled={phase!=="choose"} onClick={()=>{setTier(i);sound("flip");}}><span style={{background:d.color}}/>{d.name}</button>)}<button className={`season-tab ${isSeason?"selected":""}`} disabled={phase!=="choose"} onClick={()=>{setTier(SEASON_TAB);sound("flip");}}><span style={{background:SEASON.color}}/>{season?.name??SEASON.name}<i>SEASON</i></button></div>
       {isSeason&&<div className={`season-banner ${seasonState}`} role="status">{seasonState==="live"&&soldOut?<><b>Sold out</b> · all {total} physical cards have been pulled</>:seasonState==="live"?<><b>Season live</b> · {left_}/{total} physical cards left · ends in {left(season!.end-clock)}</>:seasonState==="soon"?<><b>Opens in</b> {left(season!.start-clock)}</>:seasonState==="ended"?<><b>Season ended</b> · its cards stay in your collection</>:<><b>No season right now</b></>}</div>}
@@ -79,8 +92,8 @@ export default function PackRoom(){
         {phase==="sealed"&&<div className="rip-guide" onPointerDown={e=>{swipe.current=e.clientX;e.currentTarget.setPointerCapture(e.pointerId);}} onPointerUp={e=>{if(Math.abs(e.clientX-swipe.current)>55)open();}}><span/><Scissors size={21}/><span/><small>SWIPE TO OPEN</small></div>}
         {phase==="opening"&&<div className="pack-open-flash"/>}
       </div>
-      <div className="pack-actions">{phase==="choose"?<><div className="pack-picker"><button className="round-button" aria-label="Previous pack" onClick={()=>setSelected((selected+9)%10)}><ChevronLeft size={19}/></button><span>PACK <b>{String(selected+1).padStart(2,"0")}</b><i>/ 10</i></span><button className="round-button" aria-label="Next pack" onClick={()=>setSelected((selected+1)%10)}><ChevronRight size={19}/></button></div><button className="primary-button" disabled={blocked} onClick={()=>{setPhase("sealed");sound("flip");}}>{blocked?(soldOut&&seasonState==="live"?"Sold out":"Season pack closed"):"This one feels lucky"}<ArrowRight size={17}/></button><small>Drag or use the arrows to browse · 5 cards in every pack</small></>:phase==="sealed"?<><button className="primary-button" disabled={!accountId||blocked} onClick={open}><Scissors size={17}/>{isSeason?"Open season pack":"Open this pack"} · {isSeason?"2 tUSD":"Free"}</button>{err&&<small className="pack-err" role="alert">{err}{isSeason&&<> <Link href="/deposit">Get free coins</Link></>}</small>}<button className="text-button" onClick={()=>setPhase("choose")}>Choose a different pack</button></>:<span className="opening-copy">A new chapter is unfolding…</span>}</div>
-      <p className="pack-disclaimer">{isSeason?`Season pack: 1 real ${SEASON.name} card, tokenized as a one-of-one you can keep or send to another player. ${total||23} cards, each exists once; every card left has the same chance: 1 in ${left_||"–"}.`:"Free for every wallet: 5 trial pictures and 1 creature per pack. Rare pictures add max HP in battle. The real card set is coming soon."}</p>
+      <div className="pack-actions">{phase==="choose"?<><div className="pack-picker"><button className="round-button" aria-label="Previous pack" onClick={()=>setSelected((selected+9)%10)}><ChevronLeft size={19}/></button><span>PACK <b>{String(selected+1).padStart(2,"0")}</b><i>/ 10</i></span><button className="round-button" aria-label="Next pack" onClick={()=>setSelected((selected+1)%10)}><ChevronRight size={19}/></button></div><button className="primary-button" disabled={blocked} onClick={()=>{setPhase("sealed");sound("flip");}}>{blocked?(soldOut&&seasonState==="live"?"Sold out":"Season pack closed"):"This one feels lucky"}<ArrowRight size={17}/></button><small>Drag or use the arrows to browse · 5 cards in every pack</small></>:phase==="sealed"?<><button className="primary-button" disabled={!accountId||blocked||noTicket} onClick={open}><Scissors size={17}/>{isSeason?"Open season pack":"Open this pack"} · 1 {isSeason?"Season":"Pack"} Ticket</button>{err&&<p className={`pack-note ${/closed the wallet/.test(err)?"":"bad"}`} role="alert">{err}</p>}{(noTicket||(err&&!/closed the wallet/.test(err)))&&<Link className={`pack-cta ${isSeason?"claw":"stacker"}`} href="/arcade"><Gamepad2 size={18}/>{isSeason?"Play the Claw for a Season Ticket":"Play Stacker for a free Pack Ticket"}</Link>}<button className="pack-back" onClick={()=>setPhase("choose")}><ChevronLeft size={17}/>Choose a different pack</button></>:<span className="opening-copy">A new chapter is unfolding…</span>}</div>
+      <p className="pack-disclaimer">{isSeason?`1 Season Ticket opens it: one real card, yours as an NFT. ${left_||"–"} of ${total||23} left.`:"1 Pack Ticket opens it: 5 trial pictures and 1 creature for your decks."}</p>
     </>}
     {phase==="reveal"&&(physical&&rwaCard(physical.id)?<CardTheater ids={[physical.id]} cards={[{src:rwaCard(physical.id)!.src,name:rwaCard(physical.id)!.name,rarity:`${physical.card} · token #${physical.id}`}]} title="Your White Flare card" pack onDone={collect}/>:<CardTheater ids={pulled} title="Your new discoveries" pack onDone={collect}/>)}
     {phase==="summary"&&physical&&rwaCard(physical.id)&&<section className="pack-summary"><div className="summary-mark"><Sparkles size={28}/></div><span className="eyebrow">ONE REAL CARD, TOKENIZED</span><h1>{rwaCard(physical.id)!.name} is yours.</h1><div className="rwa-pull"><img src={rwaCard(physical.id)!.src} alt={rwaCard(physical.id)!.name}/><div><span className="new-badge inline">PHYSICAL CARD</span><b>{rwaCard(physical.id)!.name}</b><small>{physical.card} · token #{physical.id} · one of one. Keep it, or send it to another player from your collection.</small></div></div><div className="summary-actions"><button className="primary-button" onClick={reset}><RotateCcw size={16}/>Open another pack</button><Link className="subtle-button" href="/collection"><Layers size={16}/>See my physical cards<ArrowRight size={16}/></Link></div></section>}

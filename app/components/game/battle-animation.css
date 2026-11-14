@@ -763,3 +763,101 @@ body:has(.game-menu) .modal-backdrop{z-index:260}
 .season-actions button{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:4px;padding:6px 4px;border:2px solid #3b1d0e;border-radius:10px;background:linear-gradient(180deg,#f6e2b6 0 50%,#ddbf86 50% 100%);box-shadow:0 2px 0 #3b1d0e;font:400 13px "Lilita One",system-ui,sans-serif;color:#5a2e12}
 .season-actions button:active{transform:translateY(2px);box-shadow:none}
 .collection-page .season-msg{margin:0 0 14px;padding:8px 12px;border:2px solid #3b1d0e;border-radius:10px;background:#eaf6ff;color:#1f4f7a!important;font:600 13px Inter,system-ui,sans-serif}
+
+/* ── Arcade & market: same cream cards, brown outlines and Lilita One as the rest of the game ── */
+.cm-market{--top:#8fd3ff;--bottom:#3a8fd6}
+.arc-wallet{display:flex;flex-wrap:wrap;justify-content:center;gap:8px}
+.arc-wallet span{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border:3px solid #3b1d0e;border-radius:999px;background:linear-gradient(180deg,#fdf3da,#f2ddb2);box-shadow:0 3px 0 #3b1d0e;color:#5a2e12;font:400 15px "Lilita One",system-ui,sans-serif}
+.arc-wallet span b{font-size:19px;color:#3b1d0e}
+.arc-wallet .season{background:linear-gradient(180deg,#f4fbff,#cfe8fb);color:#1f3d5a}
+.arc-wallet .free{background:#3b1d0e;color:#ffd24a;box-shadow:none}.arc-wallet .free b{color:#ffd24a}
+.arc-floor,.mk-grid{width:100%;max-width:920px;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px;justify-items:center}
+.arc-machine,.mk-item{position:relative;width:100%!important;max-width:440px;align-items:center!important;text-align:center!important}
+.arc-machine h2,.mk-item h2{font:400 30px "Lilita One",system-ui,sans-serif;color:#3b1d0e}
+.arc-machine p,.mk-item p{margin:0;font:500 14px/1.45 Inter,system-ui,sans-serif!important;color:#6b4423!important}
+.arc-machine p b{color:#3b1d0e}
+.arc-tag{position:absolute;top:-14px;right:14px;display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:999px;border:3px solid #3b1d0e;font:400 13px/1 "Lilita One",system-ui,sans-serif;letter-spacing:.05em;color:#fff;text-shadow:0 1px 0 #3b1d0e;box-shadow:0 3px 0 #3b1d0e}
+.arc-tag.free{background:linear-gradient(#b9e04a,#6aa51f)}
+.arc-tag.paid{background:linear-gradient(#e05a3e,#a32424)}
+.arc-tag.soon{background:linear-gradient(#cfc3b0,#8c7a62)}
+/* machine thumbnails */
+.arc-art{width:100%;height:120px;border:3px solid #3b1d0e;border-radius:14px;background:#1d1446;display:grid;place-items:center;position:relative;overflow:hidden;box-shadow:inset 0 0 0 3px #ffffff14}
+.stacker .arc-art{grid-template-rows:repeat(5,14px);gap:4px;place-content:center}
+.stacker .arc-art i{display:block;height:14px;border-radius:3px;background:linear-gradient(#ffe27a,#f29a1d);box-shadow:0 2px 0 #3b1d0e}
+.stacker .arc-art i:nth-child(1){width:42px;margin-left:30px}.stacker .arc-art i:nth-child(2){width:56px;margin-left:16px}.stacker .arc-art i:nth-child(3){width:70px;margin-left:8px}.stacker .arc-art i:nth-child(4){width:84px}.stacker .arc-art i:nth-child(5){width:84px}
+.claw .arc-art b{position:absolute;top:0;left:50%;width:4px;height:44px;background:#cfd6e6;transform:translateX(-50%)}
+.claw .arc-art b::after{content:"";position:absolute;bottom:-16px;left:50%;width:30px;height:18px;border:4px solid #cfd6e6;border-top:0;border-radius:0 0 14px 14px;transform:translateX(-50%)}
+.claw .arc-art i{position:absolute;bottom:12px;width:30px;height:30px;border-radius:50%;border:3px solid #3b1d0e}
+.claw .arc-art i:nth-of-type(1){left:22%;background:linear-gradient(180deg,#fff 50%,#4aa3e8 50%)}.claw .arc-art i:nth-of-type(2){left:46%;background:linear-gradient(180deg,#fff 50%,#e0569b 50%)}.claw .arc-art i:nth-of-type(3){left:70%;background:linear-gradient(180deg,#fff 50%,#f2b11d 50%)}
+/* playing */
+.arc-play{max-width:460px!important}
+.arc-game{width:100%;display:flex;flex-direction:column;align-items:center;gap:12px}
+.arc-hint{margin:0;font:500 13px Inter,system-ui,sans-serif!important;color:#6b4423!important}
+.arc-stack{position:relative;width:100%;max-width:330px;padding:8px;border:4px solid #3b1d0e;border-radius:16px;background:#1d1446;display:flex;flex-direction:column;gap:5px;touch-action:manipulation;cursor:pointer}
+.arc-row{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+.arc-row.top{padding-bottom:5px;border-bottom:3px dashed #ffd24a88}
+.arc-row i{aspect-ratio:1;border-radius:6px;background:#ffffff10}
+.arc-row i.lock{background:linear-gradient(#ffe27a,#f29a1d);box-shadow:0 2px 0 #3b1d0e}
+.arc-row i.live{background:linear-gradient(#8fd3ff,#3a8fd6);box-shadow:0 2px 0 #3b1d0e}
+.arc-claw{position:relative;width:100%;max-width:380px;height:300px;border:4px solid #3b1d0e;border-radius:16px;background:linear-gradient(180deg,#2a1f63,#1d1446 70%,#120c30);overflow:hidden;touch-action:manipulation;cursor:pointer}
+.arc-rail{position:absolute;top:14px;left:0;right:0;height:6px;background:#cfd6e6;box-shadow:0 2px 0 #0006}
+.arc-grab{position:absolute;top:14px;width:0;transform:translateX(-50%)}
+.arc-cable{position:absolute;left:-2px;top:0;width:4px;height:40px;background:#cfd6e6;transition:height .7s cubic-bezier(.3,.7,.4,1)}
+.arc-hook{position:absolute;left:-22px;top:38px;width:44px;height:26px;border:5px solid #cfd6e6;border-top:0;border-radius:0 0 22px 22px;transition:top .7s cubic-bezier(.3,.7,.4,1)}
+.arc-grab.drop .arc-cable{height:206px}.arc-grab.drop .arc-hook{top:204px}
+.arc-grab .arc-cap.held{position:absolute;left:-20px;top:60px;bottom:auto;transition:top .7s}
+.arc-cap{position:absolute;bottom:22px;width:40px;height:40px;margin-left:-20px;border-radius:50%;border:3px solid #3b1d0e;background:linear-gradient(180deg,#fff 50%,hsl(var(--h) 75% 58%) 50%);box-shadow:0 3px 0 #0006}
+.arc-flash{position:absolute;inset:0;display:grid;place-items:center;font:400 44px "Lilita One",system-ui,sans-serif;color:#fff;text-shadow:0 4px 0 #3b1d0e;animation:newPop .4s ease both}
+.arc-flash.win{color:#ffd24a}.arc-flash.lose{color:#f3eaff}
+.arc-result{max-width:460px!important}
+.arc-result h2{font:400 30px "Lilita One",system-ui,sans-serif;color:#3b1d0e}
+.arc-result.win h2{color:#a35a00}
+.arc-result p{font:500 15px/1.45 Inter,system-ui,sans-serif!important;color:#6b4423!important}
+.arc-actions{width:100%;display:flex;flex-direction:column;gap:10px}
+.arc-busy,.arc-err{display:inline-flex;align-items:center;gap:8px;margin:0;padding:8px 14px;border:3px solid #3b1d0e;border-radius:12px;background:#fdf3da;color:#5a2e12;font:600 14px Inter,system-ui,sans-serif}
+.arc-err{background:#ffe1d6;color:#8a2a12}.arc-err a{color:#8a2a12;text-decoration:underline}
+/* market */
+.mk-grid{grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
+.mk-art{width:100%;height:170px;display:grid;place-items:center;border:3px solid #3b1d0e;border-radius:14px;background:radial-gradient(circle at 50% 40%,#3a2f86,#1d1446);color:#ffd24a;overflow:hidden}
+.mk-art img{height:150px;width:auto;border-radius:6px;box-shadow:0 6px 14px #0008;transform:rotate(-4deg)}
+.mk-cost{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:#3b1d0e;color:#ffd24a;font:400 14px "Lilita One",system-ui,sans-serif}
+.mk-btn{font-size:18px!important;height:52px!important}
+.mk-item.soon .mk-art{filter:grayscale(.6);opacity:.75}
+.mk-item.soon h2{color:#7a6650}
+
+/* ── Pack reveal & summary type pass: Lilita One for display, Inter for running text, nothing tiny ── */
+.pack-summary .eyebrow{font:400 15px/1 "Lilita One",system-ui,sans-serif!important;letter-spacing:.1em;color:#ffcf8a!important;text-shadow:0 2px 0 #3b1d0e}
+.pack-summary h1{font:400 46px/1.1 "Lilita One",system-ui,sans-serif!important;letter-spacing:.01em;color:#fff6e6!important;text-shadow:0 3px 0 #3b1d0e}
+.pack-summary>p{font:500 16px/1.45 Inter,system-ui,sans-serif!important;color:#f3eaff!important}
+.pack-summary .new-creature small{font:500 14px/1.45 Inter,system-ui,sans-serif!important}
+.pack-summary .result-card b{display:block;margin-top:8px;font:400 18px/1.15 "Lilita One",system-ui,sans-serif!important;color:#fff6e6!important;text-shadow:0 2px 0 #3b1d0e}
+.pack-summary .result-card small{font:600 13px Inter,system-ui,sans-serif!important;color:#d9c8f0!important}
+.pack-summary .summary-actions .subtle-button{font-size:16px!important}
+.theater-header .eyebrow{font:400 14px/1 "Lilita One",system-ui,sans-serif!important;letter-spacing:.1em;color:#ffcf8a!important}
+.theater-header h2{font:400 26px/1.15 "Lilita One",system-ui,sans-serif!important;color:#fff6e6!important;text-shadow:0 2px 0 #3b1d0e}
+.theater-bottom .card-rarity{font:400 14px/1 "Lilita One",system-ui,sans-serif!important;letter-spacing:.08em;color:#ffd24a!important}
+.theater-bottom h2{font:400 38px/1.1 "Lilita One",system-ui,sans-serif!important;color:#fff6e6!important;text-shadow:0 3px 0 #3b1d0e}
+.theater-pagination span{font:400 16px "Lilita One",system-ui,sans-serif!important;color:#fff6e6!important}
+.theater-pagination span i{color:#bfa9e0!important;font-style:normal}
+@media (max-width:640px){.pack-summary h1{font-size:34px!important}.theater-bottom h2{font-size:30px!important}.pack-summary .result-card b{font-size:15px!important}}
+
+/* ── Arcade rules sheet ── */
+.arc-rules-btn{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border:3px solid #3b1d0e;border-radius:999px;background:linear-gradient(180deg,#fff 0 50%,#f2ddb2 50% 100%);box-shadow:0 3px 0 #3b1d0e;color:#5a2e12;font:400 15px "Lilita One",system-ui,sans-serif;cursor:pointer}
+.arc-rules-btn:active{transform:translateY(2px);box-shadow:0 1px 0 #3b1d0e}
+.arc-sheet{position:fixed;inset:0;z-index:300;display:grid;place-items:center;padding:16px;background:#05041499;backdrop-filter:blur(3px)}
+.arc-sheet .qm-card{max-width:420px;text-align:left!important;align-items:stretch!important}
+.arc-sheet h2{font:400 30px "Lilita One",system-ui,sans-serif;color:#3b1d0e;text-align:center}
+.arc-sheet ol{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:8px;font:500 15px/1.45 Inter,system-ui,sans-serif;color:#5a2e12}
+.arc-sheet ol b{color:#3b1d0e}
+.arc-sheet li::marker{font-family:"Lilita One",system-ui,sans-serif;color:#f29a1d}
+
+/* ── Pack room: real buttons under "Open this pack", no underlined links ── */
+.pack-actions .pack-cta,.pack-actions .pack-back{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-width:242px;padding:11px 20px;border:3px solid #3b1d0e;border-radius:14px;box-shadow:0 4px 0 #3b1d0e;font:400 17px "Lilita One",system-ui,sans-serif;letter-spacing:.02em;text-decoration:none!important;cursor:pointer;transition:transform .08s}
+.pack-actions .pack-cta:active,.pack-actions .pack-back:active{transform:translateY(3px);box-shadow:0 1px 0 #3b1d0e}
+.pack-actions .pack-cta{color:#fff;text-shadow:0 2px 0 #3b1d0e}
+.pack-actions .pack-cta.claw{background:linear-gradient(180deg,#e05a3e 0 50%,#a32424 50% 100%)}
+.pack-actions .pack-cta.stacker{background:linear-gradient(180deg,#b9e04a 0 50%,#6aa51f 50% 100%)}
+.pack-actions .pack-back{background:linear-gradient(180deg,#f6e2b6 0 50%,#ddbf86 50% 100%);color:#5a2e12}
+.pack-actions .pack-note{margin:0;max-width:320px;padding:8px 14px;border:3px solid #3b1d0e;border-radius:12px;background:#fdf3da;color:#5a2e12;font:600 14px/1.4 Inter,system-ui,sans-serif;text-align:center;text-shadow:none}
+.pack-actions .pack-note.bad{background:#ffe1d6;color:#8a2a12}
+.pack-actions .primary-button:disabled{opacity:1;filter:grayscale(1) brightness(1.05);cursor:not-allowed}.pack-actions .primary-button:disabled,.pack-actions .primary-button:disabled *{color:#fff!important;text-shadow:0 2px 0 #3b1d0e!important}

@@ -67,7 +67,8 @@ export function MainMenu({ tier, onTier, onBattle, audio, onAudio }: { tier: num
       <nav className="cm-buttons">
         <Link className="cm-btn cm-play" href={`/play?tier=${tier}`}>BATTLE</Link>
         <button className="cm-btn cm-ranked" onClick={onBattle}>PRACTICE</button>
-        <Link className="cm-btn cm-packs" href="/packs">PACKS</Link>
+        <Link className="cm-btn cm-packs" href="/arcade">ARCADE</Link>
+        <Link className="cm-btn cm-market" href="/market">MARKET</Link>
         <Link className="cm-btn cm-collection" href="/collection">COLLECTION</Link>
       </nav>
 

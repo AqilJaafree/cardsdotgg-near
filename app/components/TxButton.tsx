@@ -40,8 +40,12 @@ export function TxButton({
   );
 }
 
+/** The player closed or declined the wallet window (e.g. Meteor's "User closed the window before completing the action"). */
+export const isCancel = (s: string) => /user (rejected|closed|cancel)|closed the window|wallet closed|cancel|reject|denied/i.test(s);
+
 /** Contract panics arrive wrapped in JSON; pull out the human part. */
 export function readable(s: string): string {
+  if (isCancel(s) && !/Smart contract panicked/.test(s)) return "You closed the wallet, so nothing was sent.";
   const m = s.match(/Smart contract panicked: ([^"\\]+)/);
   const text = m ? m[1] : s;
   // Plain-language versions of the contract's refusals that a player can actually hit.

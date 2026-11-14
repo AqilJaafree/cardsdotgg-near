@@ -17,7 +17,8 @@ type Ctx = {
   session: {
     active: boolean; busy: boolean; error: string | null; enable: () => Promise<void>; disable: () => Promise<void>;
     /** Matchmaking: sends `c` and adds the session key in the SAME wallet approval. With a session already on, it is just `call`. */
-    startWith: (c: CallArgs) => Promise<{ hash?: string; failure?: string }>;
+    /** `verify` answers "did the call already go through?", so a failed bundled approval is never blindly sent twice. */
+    startWith: (c: CallArgs, verify?: () => Promise<boolean>) => Promise<{ hash?: string; failure?: string }>;
     /** End of a match: sends `c` (e.g. collect rewards) and removes the session key in the SAME wallet approval. */
     endWith: (c: CallArgs | null) => Promise<{ hash?: string; failure?: string }>;
   };
@@ -172,7 +173,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     return { hash: out.transaction?.hash, failure: failureOf(out) };
   }, [wallet, sess, accountId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const startWith = useCallback<Ctx["session"]["startWith"]>(async (c) => {
+  const startWith = useCallback<Ctx["session"]["startWith"]>(async (c, verify) => {
     if (!wallet || !accountId) throw new Error("Wallet is not connected");
     if (sess) return call(c);
     if (bundleBroken.current) return call(c); // this wallet could not read the bundled add-key approval earlier
@@ -188,6 +189,9 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       if (/user (rejected|closed|cancel)|closed|cancel|reject|denied/i.test(m)) throw e; // the player said no: stop here
       // The wallet could not handle the bundled approval. Quick play is optional, so play on without it.
       bundleBroken.current = true;
+      // The wallet may report an error for the add-key step after the game call has already gone through. Check before
+      // sending it again, or it would run twice (a second join fails with "not open"; a second search opens a second lobby).
+      if (verify) { await new Promise((r) => setTimeout(r, 1500)); if (await verify().catch(() => false)) { setSessError("Quick play couldn’t start with this wallet, so moves will ask for approval."); return {}; } }
       setSessError("Quick play couldn’t start with this wallet, so moves will ask for approval.");
       return call(c);
     }

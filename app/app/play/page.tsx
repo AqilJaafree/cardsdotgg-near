@@ -9,7 +9,7 @@ import OnlineBattle from "@/components/game/OnlineBattle";
 import { SettingsSheet } from "@/components/game/SettingsSheet";
 import { useBlockHeight, useView } from "@/lib/useView";
 import { useWallet } from "@/lib/wallet";
-import { TGAS } from "@/lib/near";
+import { TGAS, view } from "@/lib/near";
 
 /** How many recent matches to scan for open challenges and the player's own match. */
 const SCAN = 40;
@@ -104,7 +104,7 @@ function QuickMatch() {
       <p className="qm-deck">Your {TIERS[deck.tier]} deck #{String(deck.id)} is ready</p>
       <p>A player is waiting in the lobby. Tap to join and the fight starts.</p>
       <small>You take turns. One approval now, then no pop-ups during the fight.</small>
-      <TxButton label="JOIN BATTLE" withSession onConfirmed={refetch} request={{ receiverId: A.game, methodName: "accept_duel", args: { match_id: target.id, deck_id: String(deck.id) }, gas: TGAS(60) }} />
+      <TxButton label="JOIN BATTLE" withSession onConfirmed={refetch} onFailed={refetch} verify={async () => { const m = await view<MatchJson | null>(A.game, "get_match", { match_id: target.id }); return !!m && m.player_b === me && m.status !== 0; }} request={{ receiverId: A.game, methodName: "accept_duel", args: { match_id: target.id, deck_id: String(deck.id) }, gas: TGAS(60) }} />
     </>;
   } else {
     body = <>
@@ -112,7 +112,7 @@ function QuickMatch() {
       <p className="qm-deck">Your {TIERS[deck.tier]} deck #{String(deck.id)}</p>
       <p>Find a player to duel. Knock out 3 cards to win.</p>
       <small>One approval now, then no pop-ups during the fight.</small>
-      <TxButton label="FIND OPPONENT" withSession onConfirmed={refetch} request={{ receiverId: A.game, methodName: "create_challenge", args: { deck_id: String(deck.id), opponent: null }, gas: TGAS(60) }} />
+      <TxButton label="FIND OPPONENT" withSession onConfirmed={refetch} onFailed={refetch} verify={async () => { const rows = await view<MatchJson[]>(A.game, "recent_matches", { limit: 10 }); const t = Math.floor(Date.now() / 1000); return rows.some((m) => m.player_a === me && m.status === 0 && Number(m.created_at) >= t - 180); }} request={{ receiverId: A.game, methodName: "create_challenge", args: { deck_id: String(deck.id), opponent: null }, gas: TGAS(60) }} />
     </>;
   }
 

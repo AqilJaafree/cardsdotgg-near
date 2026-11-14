@@ -12,7 +12,7 @@
 [![Yield data](https://img.shields.io/badge/yield%20data-Rhea%20pools-6c47ff)](#where-rhea-data-is-used)
 [![Status](https://img.shields.io/badge/status-prototype-orange)](#overview)
 
-[App tour](#app-tour) · [How it works](#how-it-works) · [Game rules](#game-rules) · [Architecture](#architecture) · [Quick start](#quick-start)
+[Why NEAR](#why-near) · [App tour](#app-tour) · [How it works](#how-it-works) · [Game rules](#game-rules) · [Architecture](#architecture) · [Quick start](#quick-start)
 
 </div>
 
@@ -21,6 +21,7 @@
 ## Table of contents
 
 - [Overview](#overview)
+- [Why NEAR](#why-near)
 - [App tour](#app-tour)
 - [How it works](#how-it-works)
 - [Game rules](#game-rules)
@@ -47,6 +48,34 @@ cardsdotgg is a trading-card battler where your deck is a DeFi position. You put
 - **Practice for free.** Practice plays the same rules against the computer, with your own saved deck, and sends nothing to the chain.
 
 > **Status:** deployed on NEAR testnet and exercised end to end (claim, deposit, seed, challenge, accept, resolve, replay, withdraw), plus a full turn-based duel with session keys only (`pnpm e2e:duel`), a free arcade ticket opening a trial pack with ownership checks (`pnpm e2e:packs`), and the claw-to-NFT season flow (`pnpm e2e:season`). Players have pulled 8 of the 23 White Flare cards on testnet.
+
+## Why NEAR
+
+NEAR is the game's backend. There is no game server: everything that has to be trusted (money, match results and card ownership) lives in one NEAR smart contract.
+
+### How NEAR is used
+
+| Part of the game | What NEAR does | NEAR feature behind it |
+| --- | --- | --- |
+| **Decks (vault)** | Depositing tUSD or tNEAR mints a deck. Principal stays locked in the contract and yield accrues to the deck's escrow. | NEP-141 tokens with `ft_transfer_call`: a deposit is one transaction, with no separate approve step |
+| **Yield rates** | The keeper reads real [Rhea](https://rhea.finance) pools on NEAR mainnet and writes their rates into the contract's oracle. | Rhea is a NEAR-native DEX, so the yield comes from real NEAR DeFi data |
+| **Duels** | Every turn is a transaction. The contract checks the rules, rolls damage, records the move, and at the end pays the winner 95% of the stakes and updates Elo. | Fast, cheap transactions (about 1 second to finality) make turn-by-turn onchain play practical |
+| **Quick play** | Matchmaking adds a restricted key to your account that can only call the game's move methods, so a whole duel has no wallet pop-ups. | Function-call access keys: a NEAR account can hold keys limited to one contract and to chosen methods |
+| **Packs and collection** | Opening a pack unlocks creatures and pictures in your onchain collection, and the contract refuses deck cards you do not own. | Contract storage, and the block's `random_seed` for pack contents |
+| **Arcade tickets** | Free Stacker tickets (3 a day) and paid Claw tickets are counted by the contract, which opens packs only with a ticket. | The same contract, so the daily cap and the 2 tUSD payment cannot be bypassed from the app |
+| **White Flare real cards** | The 23 physical cards are a fixed stock. Each pack mints one as a one-of-one NFT, never duplicated and transferable to other players. | NEP-171 NFTs with NEP-177 metadata, NEP-178 approvals for marketplaces and NEP-181 enumeration |
+| **Graded cards** | Buy with NEAR pays real NEAR on mainnet, and NEAR Intents delivers the price to the buyer's card wallet. | NEAR Intents for cross-chain payment, and several actions in one transaction (wrap, register and send in one approval) |
+| **Wallets** | Sign-in through Meteor, HOT or MyNearWallet, with testnet NEAR from NEAR's official faucet. | `@hot-labs/near-connect` |
+
+### Why it is needed
+
+1. **Money has to be trustless.** Deposits, stakes and payouts cannot depend on a server the player has to trust. The contract holds the funds and settles matches itself.
+2. **Results must be verifiable.** Every duel move and result is recorded onchain, so anyone can replay a match and check it. A player cannot fake a win the contract did not see.
+3. **Ownership and scarcity.** Unlocked cards, tickets and especially the 23 real cards only mean something if nobody can copy or edit them, the game's own servers included. NEAR NFTs make each real card provably one of one, and transferable.
+4. **Playable speed and cost.** Onchain duels need fast, cheap transactions, and quick-play keys remove the pop-up per move. Together they make turn-by-turn onchain play feel like a game.
+5. **One contract, one place.** Calls between NEAR contracts are asynchronous, so everything that must change together (vault, escrow, arena, packs, arcade and NFTs) lives in one contract and settles in a single transaction.
+
+**What does not use NEAR:** Practice runs the same duel rules entirely in the browser against the computer and sends nothing to the chain, which is why it works without a wallet. The game itself runs on testnet with free test tokens; only reading Rhea's yield data and paying for graded cards touch mainnet.
 
 ## App tour
 

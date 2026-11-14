@@ -1,17 +1,21 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { ArrowRight, Flag, Swords, Trophy, Volume2, VolumeX, X, Zap } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Flag, Settings, Swords, Trophy, X, Zap } from "lucide-react";
 import BattleBoard, { Energy } from "./BattleBoard";
 import { AttackChoices, AttackCinematic, BattleOpening } from "./BattleChoreography";
 import type { EffectEvent } from "./BattleEffects";
 import { readable } from "@/components/TxButton";
 import { QuickPlay } from "./QuickPlay";
+import ReplayBattle from "./ReplayBattle";
+import { SettingsSheet } from "./SettingsSheet";
 import { A, type MatchJson } from "@/lib/contracts";
 import { battleTiming, type AttackCue } from "@/lib/game/choreography";
 import { catalog } from "@/lib/game/catalog";
 import { ATTACH, ATTACK, POWER, POWER_COST, RETREAT_COST, TURN_SECS, creature, defaultArt, describe, estimate, retreat, skinOf, stage, type DuelCard, type DuelJson, type DuelLog, type DuelSide, type Move } from "@/lib/game/duel";
 import type { BattleState, Fighter } from "@/lib/game/simulation";
+import { imgFor, toBoard } from "@/lib/game/duelView";
 import { enableSound, sound } from "@/lib/game/sound";
 import { TGAS } from "@/lib/near";
 import { useView } from "@/lib/useView";
@@ -21,29 +25,17 @@ const CardTheater = dynamic(() => import("./CardTheater"), { ssr: false });
 const short = (a?: string | null) => (a ? (a.length > 14 ? `${a.slice(0, 7)}…${a.slice(-4)}` : a) : "");
 const mm = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
-/** The picture a side shows for one of its creatures: its chosen art, or the creature's own deck art. */
-const imgFor = (s: DuelSide, id: number) => { const a = skinOf(s, id); return a > 0 && catalog.some((c) => c.id === a) ? a : defaultArt(id); };
-const fighter = (s: DuelSide, c: DuelCard): Fighter => ({ id: imgFor(s, c.id), hp: c.hp, maxHp: c.max_hp, energy: c.energy });
-
-/** The onchain duel in the shape the practice board draws: "player" is you, "opponent" is the other account. */
-function toBoard(d: DuelJson, me: number, mine: DuelSide): BattleState {
-  const side = (s: DuelSide) => ({ active: fighter(s, s.active), bench: s.bench.map((c) => fighter(s, c)), hand: s.hand.map((id) => imgFor(s, id)), points: s.points });
-  return {
-    player: side(mine), opponent: side(d.sides[1 - me]), turn: Math.ceil(d.turn / 2), energyUsed: d.energy_used,
-    winner: d.winner === me ? "player" : d.winner === 1 - me ? "opponent" : null,
-  };
-}
-
 /**
  * The real, onchain duel on the practice screen: same board, opening, attack cinematics and result as practice mode.
  * The board is driven by `get_duel`. Every move in the contract's log (yours and your opponent's) plays as an
  * animation, and a whole turn is sent in one transaction.
  */
-export default function OnlineBattle({ match, me, onDone }: { match: MatchJson; me: string; onDone: () => void }) {
+export default function OnlineBattle({ match, me, onLeave }: { match: MatchJson; me: string; onLeave: () => void }) {
   const mySide = match.player_a === me ? 0 : 1;
   const foe = mySide === 0 ? match.player_b : match.player_a;
   const { call, session } = useWallet();
-  const duel = useView<DuelJson>(A.game, "get_duel", { match_id: match.id }, { interval: 4000 });
+  const router = useRouter();
+  const duel = useView<DuelJson>(A.game, "get_duel", { match_id: match.id }, { interval: match.status === 3 ? undefined : 5000 });
 
   const [shown, setShown] = useState<DuelJson>();              // what the board shows (catches up with the chain as animations play)
   const [phase, setPhase] = useState<"loading" | "opening" | "battle" | "result">("loading");
@@ -55,7 +47,7 @@ export default function OnlineBattle({ match, me, onDone }: { match: MatchJson; 
   const [effect, setEffect] = useState<EffectEvent>(), [knockout, setKnockout] = useState<"player" | "opponent">(), [swapping, setSwapping] = useState(false);
   const [point, setPoint] = useState<"player" | "opponent" | null>(null);
   const [choices, setChoices] = useState(false), [inspect, setInspect] = useState<number[] | null>(null), [confirmExit, setConfirmExit] = useState(false);
-  const [audio, setAudio] = useState(false);
+  const [audio, setAudio] = useState(false), [settingsOpen, setSettingsOpen] = useState(false), [replay, setReplay] = useState(false), [claimed, setClaimed] = useState(false);
   const [clock, setClock] = useState(() => Math.floor(Date.now() / 1000));
 
   const latest = useRef<DuelJson>(), processed = useRef<number | null>(null), queue = useRef<DuelLog[]>([]), running = useRef(false);
@@ -63,8 +55,6 @@ export default function OnlineBattle({ match, me, onDone }: { match: MatchJson; 
   const wait = (ms: number, fn: () => void) => { timers.current.push(setTimeout(fn, ms)); };
   useEffect(() => () => { timers.current.forEach(clearTimeout); }, []);
   useEffect(() => { const t = setInterval(() => setClock(Math.floor(Date.now() / 1000)), 1000); return () => clearInterval(t); }, []);
-  // Poll faster than the default while the duel is live, so your opponent's move shows up quickly.
-  useEffect(() => { const t = setInterval(() => { if (!document.hidden && shown?.winner == null) duel.refetch(); }, 2500); return () => clearInterval(t); }, [shown?.winner]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const burst = (kind: EffectEvent["kind"], target: EffectEvent["target"], amount?: number) => setEffect({ id: Date.now(), kind, target, amount });
   const sideName = (s: number): "player" | "opponent" => (s === mySide ? "player" : "opponent");
@@ -127,12 +117,19 @@ export default function OnlineBattle({ match, me, onDone }: { match: MatchJson; 
   }, [duel.data]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { setMoves([]); }, [shown?.turn]);
 
-  /** End of the match: collect rewards and close quick play in one wallet approval. */
+  /** Claim rewards: collects the deck's yield and, if quick play is on, closes it in the same wallet approval. */
   const finish = async () => {
     setErr("");
     try {
-      const r = await session.endWith({ receiverId: A.game, methodName: "checkpoint", args: { deck_id: mySide === 0 ? match.deck_a : match.deck_b }, gas: TGAS(30) });
-      if (r.failure) setErr(readable(r.failure)); else onDone();
+      const claim = () => session.endWith({ receiverId: A.game, methodName: "checkpoint", args: { deck_id: mySide === 0 ? match.deck_a : match.deck_b }, gas: TGAS(30) });
+      let r;
+      try { r = await claim(); }
+      catch (e) { // the free RPC briefly refuses when it is busy: wait a moment and try once more
+        if (!/429|rate limit/i.test(String((e as Error)?.message ?? e))) throw e;
+        await new Promise((res) => setTimeout(res, 2500)); r = await claim();
+      }
+      if (r.failure) setErr(readable(r.failure));
+      else { setClaimed(true); wait(1200, () => router.push("/")); } // show "Rewards claimed" briefly, then back to the menu
     } catch (e) { setErr(readable((e as Error)?.message ?? String(e))); } // declined: the session stays on
   };
   const startBattle = () => { setPhase("battle"); if (latest.current) announce(latest.current); };
@@ -147,6 +144,7 @@ export default function OnlineBattle({ match, me, onDone }: { match: MatchJson; 
   }, [call, duel]);
 
   if (!shown) return <div className="arena-page game-fullscreen game-menu"><p className="duel-loading">Loading the duel…</p></div>;
+  if (replay) return <ReplayBattle duel={shown} match={match} mySide={mySide} onClose={() => setReplay(false)} />;
 
   const mine = stage(shown.sides[mySide], moves);
   const theirs = shown.sides[1 - mySide];
@@ -172,19 +170,20 @@ export default function OnlineBattle({ match, me, onDone }: { match: MatchJson; 
     wait(battleTiming.swap / 2, () => setMoves([...moves, retreat(i)]));
     wait(battleTiming.swap, () => setSwapping(false));
   };
-  const info = (c: DuelCard) => { const k = creature(c.id); return `${k.name} · ${k.ability}`; };
   const status = phase === "result" ? "MATCH COMPLETE" : phase === "opening" ? "YOUR LINEUP" : locked ? "RESOLVING MOVE" : myTurn ? `YOUR TURN · ${mm(left)}` : `THEIR TURN · ${mm(left)}`;
+  const statusKind = phase === "result" ? "over" : phase === "opening" ? "idle" : locked ? "busy" : myTurn ? "mine" : "theirs";
   const won = shown.winner === mySide, draw = shown.winner === 2;
+  // A forfeit or a timeout ends the duel before anyone reaches 3 points.
+  const endedEarly = shown.winner !== null && shown.winner !== 2 && shown.sides[shown.winner].points < 3;
 
   return (
-    <div className="arena-page game-fullscreen">
+    <div className="arena-page game-fullscreen online">
       <div className="arena-layout">
         <section className="arena-center">
           <div className="match-toolbar">
             <span><Swords size={14} />Online duel</span>
-            <span className="match-status"><i />{status}</span>
-            <button className="text-button" disabled={phase === "result" || busy} onClick={() => setConfirmExit(true)} aria-label="Forfeit match"><Flag size={14} /></button>
-            <button className="text-button game-sound" aria-label={audio ? "Mute sound" : "Enable sound"} onClick={() => { setAudio(!audio); enableSound(!audio); }}>{audio ? <Volume2 size={15} /> : <VolumeX size={15} />}</button>
+            <span className={`match-status st-${statusKind}`}><i />{status}</span>
+            <button className="ob-tool ob-icon" onClick={() => setSettingsOpen(true)} aria-label="Settings"><Settings size={17} /></button>
           </div>
           <div className="board-surround">
             <BattleBoard state={state} tier={tier} opponentName={short(foe) || "Opponent"} opponentTag="Online player" phase={phase === "loading" ? "ready" : phase}
@@ -200,35 +199,65 @@ export default function OnlineBattle({ match, me, onDone }: { match: MatchJson; 
                   <h2>{draw ? "Draw." : won ? "Victory!" : "Well played."}</h2>
                   <p>{draw ? "Evenly matched." : won ? "Settled onchain. The win is yours." : "Every battle is a chance to grow."}</p>
                   <img src={cardImg(state.player.active.id)} alt="" />
-                  <div className="result-score"><b>{state.player.points}</b><span>—</span><b>{state.opponent.points}</b></div>
-                  {session.active ? <>
-                    <button className="primary-button" disabled={session.busy} onClick={finish}>{session.busy ? "Waiting for your wallet…" : "Collect rewards & end session"}<ArrowRight size={16} /></button>
-                    <button className="text-button" disabled={session.busy} onClick={onDone}>Play again (keep quick play on)</button>
-                  </> : <button className="primary-button" onClick={onDone}>Continue<ArrowRight size={16} /></button>}
-                  {err && <small role="alert">{err}</small>}
+                  <div className="ob-score" role="group" aria-label={`Final score: you ${state.player.points}, ${short(foe)} ${state.opponent.points}`}>
+                    <div><small>YOU</small><b>{state.player.points}</b></div><span>—</span><div><small>{short(foe) || "OPPONENT"}</small><b>{state.opponent.points}</b></div>
+                  </div>
+                  <p className="ob-reason">{endedEarly ? (won ? "Your opponent forfeited or ran out of time." : "You forfeited or ran out of time.") : "Each knocked-out card is 1 point. First to 3 wins."}</p>
+                  <div className="ob-dock">
+                    <button className="ob-primary" disabled={session.busy || claimed} onClick={finish}>{claimed ? "Rewards claimed ✓" : session.busy ? "Waiting for your wallet…" : "Claim rewards"}</button>
+                    <div className="ob-dock-row">
+                      <button className="ob-secondary" onClick={() => setReplay(true)}>Replay</button>
+                      <button className="ob-play" onClick={onLeave}>Play again</button>
+                    </div>
+                  </div>
+                  {(err || session.error) && <small role="alert" className="ob-reason">{err || session.error}</small>}
                 </div>
               )}
             </BattleBoard>
           </div>
-          <div className="battle-controls">
-            <button className="energy-button" disabled={!canAct || attached || mine.active.energy >= 5} onClick={energy}><Energy tier={tier} /><span>{attached ? "Energy attached" : "Attach Energy"}</span></button>
-            <button className="attack-button" disabled={!canAct || mine.active.energy < 1} onClick={() => doAttack(false)}><Swords size={17} /><span>Attack</span><b>{basic}</b></button>
-            <button className="power-button" disabled={!canAct || mine.active.energy < POWER_COST} onClick={() => doAttack(true)} aria-label="Power attack"><Zap size={18} /></button>
-            {moves.length > 0 && !locked && <button className="power-button" onClick={() => setMoves([])} aria-label="Undo lined-up moves">↺</button>}
-            {!myTurn && shown.winner === null && !locked && left === 0 && <button className="attack-button" onClick={() => send("claim_timeout", { match_id: match.id }, 60)}><span>Claim win (timed out)</span></button>}
-          </div>
-          {inBattle && <QuickPlay />}
-          <p className="duel-info">{inBattle ? `You: ${info(mine.active)}  ·  ${short(foe)}: ${info(theirs.active)}` : ""}</p>
+          {phase !== "result" && (myTurn || locked ? (
+            <div className="battle-controls ob-controls">
+              <button className="ob-btn ob-energy" disabled={!canAct || attached || mine.active.energy >= 5} onClick={energy}>
+                <span><Energy tier={tier} /><b>Attach<span className="ob-xs-hide"> Energy</span></b></span>
+                <small>{attached ? "Done this turn" : mine.active.energy >= 5 ? "Already full" : `+1 Energy · ${mine.active.energy}/5`}</small>
+              </button>
+              <button className="ob-btn ob-attack" disabled={!canAct || mine.active.energy < 1} onClick={() => doAttack(false)}>
+                <span><Swords size={16} /><b>Attack</b></span>
+                <small>{mine.active.energy < 1 ? "Needs 1 Energy" : `~${basic} damage`}</small>
+              </button>
+              <button className="ob-btn ob-power" disabled={!canAct || mine.active.energy < POWER_COST} onClick={() => doAttack(true)}>
+                <span><Zap size={16} /><b>Power</b></span>
+                <small>{mine.active.energy < POWER_COST ? `Needs ${POWER_COST} Energy` : `~${power} damage`}</small>
+              </button>
+            </div>
+          ) : shown.winner === null && inBattle ? (
+            <div className="battle-controls ob-wait">
+              <div className="ob-waitbar"><i />{short(foe) || "Your opponent"} is choosing a move<small>{left > 0 ? `${mm(left)} left` : "out of time"}</small></div>
+              {left === 0 && !locked && <button className="ob-btn ob-attack ob-claim" onClick={() => send("claim_timeout", { match_id: match.id }, 60)}><span><b>Claim win</b></span><small>they ran out of time</small></button>}
+            </div>
+          ) : null)}
+          {inBattle && myTurn && !locked && (
+            <p className="ob-caption">
+              {moves.length > 0
+                ? <>Lined up: {moves.map((m) => (m[0] === 0 ? "Attach Energy" : "Retreat")).join(" → ")} <button className="ob-link" onClick={() => setMoves([])}>Undo</button></>
+                : <>Tap a bench card to retreat · costs 1 Energy</>}
+            </p>
+          )}
+          {inBattle && !session.active && <QuickPlay />}
           {err && <p className="duel-err" role="alert" onClick={() => setErr("")}>{err}</p>}
         </section>
       </div>
+      {settingsOpen && <SettingsSheet onClose={() => setSettingsOpen(false)} sound={{ on: audio, toggle: () => { setAudio(!audio); enableSound(!audio); } }} inDuel={phase !== "result"}
+        onForfeit={phase === "battle" && !busy ? () => { setSettingsOpen(false); setConfirmExit(true); } : undefined} />}
       {inspect && <CardTheater ids={inspect} title="A closer look" inspection onDone={() => setInspect(null)} />}
       {confirmExit && (
         <div className="modal-backdrop"><section className="confirmation" role="dialog" aria-modal="true" aria-label="Forfeit match">
           <button className="round-button dismiss" onClick={() => setConfirmExit(false)} aria-label="Close"><X size={18} /></button>
           <Flag size={28} /><h2>Forfeit this match?</h2><p>Quitting counts as a loss. Your opponent wins and the stake settles.</p>
-          <button className="primary-button" onClick={() => { setConfirmExit(false); send("forfeit", { match_id: match.id }, 60); }}>Forfeit</button>
-          <button className="text-button" onClick={() => setConfirmExit(false)}>Keep playing</button>
+          <div className="ob-dialog-actions">
+            <button className="ob-danger" onClick={() => { setConfirmExit(false); send("forfeit", { match_id: match.id }, 60); }}>Forfeit</button>
+            <button className="ob-secondary" onClick={() => setConfirmExit(false)}>Keep playing</button>
+          </div>
         </section></div>
       )}
     </div>

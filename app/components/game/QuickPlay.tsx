@@ -2,19 +2,14 @@
 import { useWallet } from "@/lib/wallet";
 
 /**
- * Quick play: your game moves send with no pop-up. It normally starts with matchmaking (same approval) and ends with the
- * result screen; this strip only offers it when a duel is already running without it, and shows when it is on. The key added to your account can
+ * Quick play: your game moves send with no pop-up. It normally starts with matchmaking (same approval); turning it off or on
+ * later is in Settings. This strip only offers it when a duel is already running without it. The key added to your account can
  * only call this game's move methods (no token transfers, no deposits) and you can turn it off at any time.
  */
-export function QuickPlay({ offer = true }: { offer?: boolean }) {
+export function QuickPlay() {
   const { session, accountId } = useWallet();
-  if (!accountId) return null;
-  if (session.active) {
-    return (
-      <p className="quick-on" role="status">⚡ Quick play is on: your moves send with no pop-ups. <button onClick={session.disable} disabled={session.busy}>Turn off</button></p>
-    );
-  }
-  if (!offer) return null; // matchmaking already turns it on with its own approval
+  // Once it is on, the only control is in Settings (the gear). This strip is just the offer.
+  if (!accountId || session.active) return null;
   return (
     <div className="quick-box">
       <button className="quick-play" onClick={session.enable} disabled={session.busy}>

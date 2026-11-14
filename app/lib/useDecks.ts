@@ -33,5 +33,5 @@ export function useDecks(poll = true) {
     });
     return () => { live = false; };
   }, [ids]); // eslint-disable-line react-hooks/exhaustive-deps
-  return { decks: decks.map((d) => ({ ...d, uri: uris[`${d.id}:${d.retired}`] })), refetch: res.refetch };
+  return { decks: decks.map((d) => ({ ...d, uri: uris[`${d.id}:${d.retired}`] })), refetch: res.refetch, /** true once the list has loaded (or failed), so an empty list can be told from a pending one */ loaded: res.data !== undefined || !!res.error };
 }

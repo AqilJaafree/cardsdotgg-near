@@ -3,7 +3,7 @@ import { decks } from "./catalog";
 
 /** Mirrors near/game/src/duel.rs (the contract's own JSON for `get_duel`). */
 export type DuelCard = { id: number; hp: number; max_hp: number; energy: number; atk_bonus: number; crit_bonus: number; widen: number; halved: boolean; used: boolean; shield_cd: number };
-export type DuelSide = { active: DuelCard; bench: DuelCard[]; hand: number[]; points: number; faints: number; turns: number; lineup: number[]; art: number[]; tier: number };
+export type DuelSide = { active: DuelCard; bench: DuelCard[]; hand: number[]; points: number; faints: number; turns: number; lineup: number[]; art: number[]; perk?: number[]; tier: number };
 export type DuelLog = { side: number; action: number; arg: number; card: number; target: number; damage: number; crit: boolean; dodged: boolean; ko: boolean };
 export type DuelJson = {
   sides: [DuelSide, DuelSide];

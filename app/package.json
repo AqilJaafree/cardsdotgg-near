@@ -10,7 +10,8 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test:game": "node scripts/test-game.mjs"
+    "test:game": "node scripts/test-game.mjs",
+    "test:duel": "tsx scripts/test-duel-engine.ts"
   },
   "dependencies": {
     "@hot-labs/near-connect": "^0.12.0",
@@ -28,6 +29,7 @@
     "@types/react": "18.3.12",
     "@types/react-dom": "18.3.1",
     "@types/three": "0.170.0",
+    "tsx": "4.19.2",
     "typescript": "5.6.3"
   }
 }

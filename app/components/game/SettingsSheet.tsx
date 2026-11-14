@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { useWallet } from "@/lib/wallet";
 
 /** Game settings: turn quick play (the session key) on or off, and sound. Opens as a sheet over the screen. */
-export function SettingsSheet({ onClose, sound, inDuel = false, onForfeit }: { onClose: () => void; sound?: { on: boolean; toggle: () => void }; inDuel?: boolean; onForfeit?: () => void }) {
+export function SettingsSheet({ onClose, sound, inDuel = false, onForfeit, hideQuickPlay = false }: { onClose: () => void; sound?: { on: boolean; toggle: () => void }; inDuel?: boolean; onForfeit?: () => void; hideQuickPlay?: boolean }) {
   const { session, accountId } = useWallet();
   useEffect(() => {
     const esc = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -15,7 +15,7 @@ export function SettingsSheet({ onClose, sound, inDuel = false, onForfeit }: { o
       <section className="settings-sheet" role="dialog" aria-modal="true" aria-label="Settings" onClick={(e) => e.stopPropagation()}>
         <header><h2>Settings</h2><button className="settings-x" onClick={onClose} aria-label="Close settings">✕</button></header>
 
-        <div className="settings-row settings-quick">
+        {!hideQuickPlay && <div className="settings-row settings-quick">
           <div className="settings-text">
             <b>⚡ Quick play <span className={`settings-badge ${session.active ? "on" : ""}`}>{session.active ? "ON" : "OFF"}</span></b>
             <small>
@@ -29,7 +29,7 @@ export function SettingsSheet({ onClose, sound, inDuel = false, onForfeit }: { o
             ? <button className="settings-btn" onClick={session.disable} disabled={session.busy || !accountId}>{session.busy ? "Waiting for your wallet…" : "Turn off quick play"}</button>
             : <button className="settings-btn on" onClick={session.enable} disabled={session.busy || !accountId}>{session.busy ? "Waiting for your wallet…" : "Turn on quick play"}</button>}
           {session.error && <small className="settings-err" role="alert">{session.error}</small>}
-        </div>
+        </div>}
 
         {sound && (
           <div className="settings-row">

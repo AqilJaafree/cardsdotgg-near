@@ -439,6 +439,12 @@ fn owner_customizes_cards_and_art_and_the_duel_uses_them() {
     ] {
         assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| g.set_deck_cards(U64(a), cards.clone(), art.clone()))).is_err());
     }
+    // creatures from other tiers and picture 102 must be unlocked first (packs do that)
+    assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| g.set_deck_cards(U64(a), vec![23, 0, 9, 14, 3, 5, 12, 20], vec![1, 2, 3, 0, 0, 0, 0, 102]))).is_err());
+    let mut col = collection::Collection::default();
+    col.add(&collection::Pack { pictures: [102, 60, 25, 30, 18], creature: 23 });
+    col.creatures |= (1 << 9) | (1 << 14) | (1 << 12) | (1 << 20);
+    g.collection_put(&acc("alice.near"), &col);
     g.set_deck_cards(U64(a), vec![23, 0, 9, 14, 3, 5, 12, 20], vec![1, 2, 3, 0, 0, 0, 0, 102]);
     let v = g.get_deck_cards(U64(a));
     assert!(v.custom);
@@ -467,4 +473,113 @@ fn a_staked_deck_cannot_be_edited() {
     g.create_challenge(U64(a), None);
     assert!(g.get_deck(U64(a)).unwrap().locked.0 > 0);
     assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| g.set_deck_cards(U64(a), vec![23, 0, 9, 14, 3, 5, 12, 20], vec![0; 8]))).is_err());
+}
+
+
+// ------------------------------------------------------------------ packs and unlocks
+
+fn buy_pack(g: &mut Game, who: &str, amount: u128, secs: u64) -> u128 {
+    testing_env!(ctx("tusd.near", 100, secs).build());
+    match g.ft_on_transfer(acc(who), U128(amount), r#"{"action":"pack"}"#.into()) {
+        PromiseOrValue::Value(refund) => refund.0,
+        _ => panic!("expected an immediate value"),
+    }
+}
+
+#[test]
+fn buying_a_pack_unlocks_cards_and_the_price_goes_to_the_prize_pool() {
+    let mut g = game();
+    assert_eq!(g.pack_price().0, collection::PACK_PRICE);
+    assert_eq!(g.get_collection(acc("alice.near")).opened, 0);
+    let pool = g.prize_pool().0;
+    let refund = buy_pack(&mut g, "alice.near", 5_000_000, T0 + 5);
+    assert_eq!(refund, 5_000_000 - collection::PACK_PRICE); // the extra comes back
+    assert_eq!(g.prize_pool().0, pool + collection::PACK_PRICE);
+    let c = g.get_collection(acc("alice.near"));
+    let last = c.last_pack.clone().unwrap();
+    assert_eq!(c.opened, 1);
+    assert!(c.creatures.contains(&last.creature));
+    assert!(last.pictures.iter().all(|p| c.pictures.contains(p)));
+    // a second pack differs (the counter is part of the seed) and the totals only grow
+    buy_pack(&mut g, "alice.near", collection::PACK_PRICE, T0 + 5);
+    let d = g.get_collection(acc("alice.near"));
+    assert_eq!(d.opened, 2);
+    assert!(d.pictures.len() >= c.pictures.len() && d.creatures.len() >= c.creatures.len());
+    // someone else is unaffected
+    assert_eq!(g.get_collection(acc("bob.near")).opened, 0);
+}
+
+#[test]
+fn a_pack_needs_the_full_price_and_tusd() {
+    let mut g = game();
+    assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| buy_pack(&mut g, "alice.near", collection::PACK_PRICE - 1, T0))).is_err());
+    testing_env!(ctx("tnear.near", 100, T0).build());
+    assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| g.ft_on_transfer(acc("alice.near"), U128(100 * NEAR_UNIT), r#"{"action":"pack"}"#.into()))).is_err());
+    assert_eq!(g.get_collection(acc("alice.near")).opened, 0);
+}
+
+#[test]
+fn a_deck_can_only_use_what_its_owner_has_unlocked_and_unlocked_pictures_give_hp() {
+    let mut g = game();
+    let a = deposit(&mut g, "alice.near", "tusd.near", 100_000_000, 0, T0);
+    let b = deposit(&mut g, "bob.near", "tusd.near", 100_000_000, 2, T0);
+    testing_env!(ctx("alice.near", 107, T0).build());
+    // creature 16 (Degen) is not alice's yet; picture 50 is not either
+    assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| g.set_deck_cards(U64(a), vec![16, 1, 2, 3, 4, 5, 6, 7], vec![0; 8]))).is_err());
+    assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| g.set_deck_cards(U64(a), vec![0, 1, 2, 3, 4, 5, 6, 7], vec![50, 0, 0, 0, 0, 0, 0, 0]))).is_err());
+    // starter creatures and starter pictures always work and give no perk
+    g.set_deck_cards(U64(a), vec![0, 1, 2, 3, 4, 5, 6, 7], vec![15, 2, 0, 0, 0, 0, 0, 0]);
+    // unlock a rare picture (18, +5% HP) and creature 16, then use them
+    let mut col = collection::Collection::default();
+    col.add(&collection::Pack { pictures: [50, 60, 25, 30, 18], creature: 16 });
+    g.collection_put(&acc("alice.near"), &col);
+    // the same picture twice in one deck is refused
+    assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| g.set_deck_cards(U64(a), vec![0, 1, 2, 3, 4, 5, 6, 7], vec![18, 18, 0, 0, 0, 0, 0, 0]))).is_err());
+    g.set_deck_cards(U64(a), vec![16, 1, 2, 3, 4, 5, 6, 7], vec![18, 0, 0, 0, 0, 0, 0, 0]);
+    let id = start_duel(&mut g, a, b);
+    let d = g.get_duel(U64(id)).unwrap();
+    let base = 21 * 50; // Leverage Raptor's HP stat is 21
+    assert_eq!(d.sides[0].active.id, 16);
+    assert_eq!(d.sides[0].active.max_hp, base * 105 / 100); // +5% from the unlocked rare picture
+    assert_eq!(d.sides[0].perk[0], 5);
+    assert_eq!(d.sides[1].active.max_hp, 21 * 50); // bob's Raptor has none
+}
+
+#[test]
+fn a_deck_customized_before_packs_existed_still_loads_with_no_perks() {
+    let mut g = game();
+    let a = deposit(&mut g, "alice.near", "tusd.near", 100_000_000, 0, T0);
+    let mut old = Game::deck_cards_v1();
+    old.insert(a, DeckCardsV1 { cards: [23, 0, 9, 14, 3, 5, 12, 20], art: [1, 2, 3, 0, 0, 0, 0, 102] });
+    old.flush();
+    let v = g.get_deck_cards(U64(a));
+    assert!(v.custom);
+    assert_eq!(v.cards, vec![23, 0, 9, 14, 3, 5, 12, 20]);
+    let s = g.setup_of(a);
+    assert_eq!((s.lineup[0], s.perk), (23, [0; 8]));
+}
+
+#[test]
+fn a_duel_stored_before_perks_existed_still_loads_and_can_be_played_on() {
+    let mut g = game();
+    let a = deposit(&mut g, "alice.near", "tusd.near", 100_000_000, 0, T0);
+    let b = deposit(&mut g, "bob.near", "tusd.near", 100_000_000, 2, T0);
+    let id = start_duel(&mut g, a, b);
+    // pretend this duel was stored by the previous version: move it to the old map in the old shape
+    let current = g.get_duel(U64(id)).unwrap();
+    let mut new_map = Game::duels();
+    new_map.remove(&id);
+    new_map.flush();
+    let mut old_map = Game::duels_v1();
+    old_map.insert(id, duel::DuelV1::from_current(&current));
+    old_map.flush();
+    let loaded = g.get_duel(U64(id)).unwrap();
+    assert_eq!(loaded.sides[0].lineup, current.sides[0].lineup);
+    assert_eq!(loaded.sides[0].perk, vec![0u8; 8]);
+    assert_eq!(loaded.mover, current.mover);
+    // the mover can still play; the duel is written to the new map from here on
+    testing_env!(ctx(who(loaded.mover), 140, T0 + 30).build());
+    g.play(U64(id), 0, 0);
+    assert_eq!(g.get_duel(U64(id)).unwrap().log.len(), 1);
+    assert!(Game::duels().get(&id).is_some());
 }

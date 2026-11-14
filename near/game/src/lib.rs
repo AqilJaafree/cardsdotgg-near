@@ -7,6 +7,7 @@
 //! Accounting invariant for tUSD held by this contract:
 //!   balance = reserve + liquidity[0] + total_principal[0] + prize_pool + sum(deck escrow) + sum(deck locked)
 pub mod card_data;
+pub mod collection;
 pub mod duel;
 pub mod elo;
 pub mod engine;
@@ -42,6 +43,8 @@ enum Msg {
     Deposit { tier: u8 },
     Reserve,
     Liquidity,
+    /// Buy one card pack: send at least `collection::PACK_PRICE` tUSD; any extra is returned.
+    Pack,
 }
 
 #[near(serializers = [borsh])]
@@ -132,6 +135,26 @@ pub struct DeckCardsView {
 struct DeckCards {
     cards: [u8; 8],
     art: [u8; 8],
+    /// Max-HP perk per slot, worked out from the owner's unlocked pictures when the deck was saved.
+    perk: [u8; 8],
+}
+
+/// The record as the first version of custom decks stored it (prefix "c"). Still read, never written, so decks saved
+/// before packs existed keep working with no perks.
+#[near(serializers = [borsh])]
+#[derive(Clone)]
+struct DeckCardsV1 {
+    cards: [u8; 8],
+    art: [u8; 8],
+}
+
+#[derive(Serialize)]
+#[serde(crate = "near_sdk::serde")]
+pub struct CollectionView {
+    pub creatures: Vec<u8>,
+    pub pictures: Vec<u8>,
+    pub opened: u32,
+    pub last_pack: Option<collection::Pack>,
 }
 
 #[derive(Serialize)]
@@ -312,6 +335,21 @@ impl Game {
             }
             Msg::Liquidity => {
                 self.liquidity[asset as usize] += amount.0;
+            }
+            Msg::Pack => {
+                require!(asset == TUSD, "packs cost tUSD");
+                require!(amount.0 >= collection::PACK_PRICE, "a pack costs 2 tUSD");
+                let mut col = self.collection_of(&sender_id);
+                let mut input = Vec::with_capacity(72);
+                input.extend_from_slice(sender_id.as_bytes());
+                input.extend_from_slice(&col.opened.to_be_bytes());
+                input.extend_from_slice(&env::random_seed());
+                let pack = collection::open(env::keccak256_array(&input));
+                col.add(&pack);
+                self.collection_put(&sender_id, &col);
+                self.prize_pool += collection::PACK_PRICE; // the price goes to the prize pool; the accounting invariant holds
+                env::log_str(&format!("PackOpened {} {:?} {}", sender_id, pack.pictures, pack.creature));
+                return PromiseOrValue::Value(U128(amount.0 - collection::PACK_PRICE));
             }
         }
         PromiseOrValue::Value(U128(0))
@@ -512,8 +550,13 @@ impl Game {
         if let Err(e) = duel::check_deck(&cards, &art) {
             env::panic_str(e);
         }
+        let col = self.collection_of(&caller);
+        if let Err(e) = collection::check_ownership(&col, self.deck(deck_id.0).tier, &cards, &art) {
+            env::panic_str(e);
+        }
+        let perk = collection::perks(&col, &art);
         let mut map = Self::deck_cards();
-        map.insert(deck_id.0, DeckCards { cards: cards.clone().try_into().unwrap(), art: art.try_into().unwrap() });
+        map.insert(deck_id.0, DeckCards { cards: cards.clone().try_into().unwrap(), art: art.try_into().unwrap(), perk });
         map.flush();
         env::log_str(&format!("DeckCustomized {} {:?}", deck_id.0, cards));
     }
@@ -521,12 +564,24 @@ impl Game {
     /// The deck's current cards and art; the tier's starter cards with default art until customized.
     pub fn get_deck_cards(&self, deck_id: U64) -> DeckCardsView {
         let setup = self.setup_of(deck_id.0);
-        DeckCardsView { cards: setup.lineup.to_vec(), art: setup.art.to_vec(), custom: Self::deck_cards().contains_key(&deck_id.0) }
+        DeckCardsView { cards: setup.lineup.to_vec(), art: setup.art.to_vec(), custom: Self::saved_deck_cards(deck_id.0).is_some() }
+    }
+
+    /// What an account has unlocked: creatures and pictures, how many packs it opened, and its latest pack.
+    /// The starter creatures and pictures of a deck are always usable and are not listed here.
+    pub fn get_collection(&self, account_id: AccountId) -> CollectionView {
+        let c = self.collection_of(&account_id);
+        CollectionView { creatures: c.creature_list(), pictures: c.picture_list(), opened: c.opened, last_pack: c.last.clone() }
+    }
+
+    /// Price of one pack in tUSD base units (6 decimals).
+    pub fn pack_price(&self) -> U128 {
+        U128(collection::PACK_PRICE)
     }
 
     /// Open duel state, move log included. None for matches that were not accepted as duels.
     pub fn get_duel(&self, match_id: U64) -> Option<duel::Duel> {
-        Self::duels().get(&match_id.0).cloned()
+        Self::find_duel(match_id.0)
     }
 
     /// Anyone, once the seed block has passed. The seed mixes the block's random seed with the match, so it is not
@@ -760,9 +815,18 @@ impl Game {
         m
     }
 
-    /// Duels live in their own map under prefix "u" so adding them does not change the contract's stored state.
+    /// Duels (with picture perks) live in their own map under prefix "w".
     fn duels() -> LookupMap<u64, duel::Duel> {
+        LookupMap::new(b"w")
+    }
+
+    /// Duels stored before picture perks existed (prefix "u"). They are still read, and moved to the new map on their next move.
+    fn duels_v1() -> LookupMap<u64, duel::DuelV1> {
         LookupMap::new(b"u")
+    }
+
+    fn find_duel(id: u64) -> Option<duel::Duel> {
+        Self::duels().get(&id).cloned().or_else(|| Self::duels_v1().get(&id).cloned().map(Into::into))
     }
 
     /// Per-move randomness: the block's random seed mixed with the match and how many moves came before.
@@ -774,22 +838,46 @@ impl Game {
         env::keccak256_array(&input)
     }
 
-    /// Custom deck cards live in their own map under prefix "c", for the same no-migration reason as duels.
+    /// Collections live in their own map under prefix "k", for the same no-migration reason as duels.
+    fn collections() -> LookupMap<AccountId, collection::Collection> {
+        LookupMap::new(b"k")
+    }
+
+    fn collection_of(&self, who: &AccountId) -> collection::Collection {
+        Self::collections().get(who).cloned().unwrap_or_default()
+    }
+
+    fn collection_put(&self, who: &AccountId, c: &collection::Collection) {
+        let mut map = Self::collections();
+        map.insert(who.clone(), c.clone());
+        map.flush();
+    }
+
+    /// Custom deck cards (with perks) live in their own map under prefix "e", for the same no-migration reason as duels.
     fn deck_cards() -> LookupMap<u64, DeckCards> {
+        LookupMap::new(b"e")
+    }
+
+    /// Decks customized before packs existed (prefix "c").
+    fn deck_cards_v1() -> LookupMap<u64, DeckCardsV1> {
         LookupMap::new(b"c")
+    }
+
+    fn saved_deck_cards(deck_id: u64) -> Option<DeckCards> {
+        Self::deck_cards().get(&deck_id).cloned().or_else(|| Self::deck_cards_v1().get(&deck_id).map(|o| DeckCards { cards: o.cards, art: o.art, perk: [0; 8] }))
     }
 
     /// The deck as a duel brings it: custom cards and art if set, else the tier's starter cards.
     fn setup_of(&self, deck_id: u64) -> duel::Setup {
         let tier = self.deck(deck_id).tier;
-        match Self::deck_cards().get(&deck_id) {
-            Some(c) => duel::Setup { lineup: c.cards, art: c.art, tier },
+        match Self::saved_deck_cards(deck_id) {
+            Some(c) => duel::Setup { lineup: c.cards, art: c.art, perk: c.perk, tier },
             None => duel::Setup::tier(tier),
         }
     }
 
     fn duel_of(&self, id: u64) -> duel::Duel {
-        Self::duels().get(&id).cloned().unwrap_or_else(|| env::panic_str("no such duel"))
+        Self::find_duel(id).unwrap_or_else(|| env::panic_str("no such duel"))
     }
 
     fn duel_put(&self, id: u64, d: &duel::Duel) {

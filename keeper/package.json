@@ -8,6 +8,7 @@
     "deploy-testnet": "tsx src/deploy.ts",
     "e2e": "tsx src/e2e.ts",
     "e2e:duel": "tsx src/e2e-duel.ts",
+    "e2e:packs": "tsx src/e2e-packs.ts",
     "setup-keeper": "tsx src/setup-keeper.ts",
     "resolve": "tsx src/resolver.ts",
     "resolve:watch": "tsx src/resolver.ts --watch"

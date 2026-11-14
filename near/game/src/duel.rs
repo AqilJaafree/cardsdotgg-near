@@ -111,6 +111,14 @@ pub struct Card {
     pub shield_cd: u8,
 }
 
+/// A card with a max-HP bonus of `perk` percent.
+pub fn card_perk(id: u8, perk: u8) -> Card {
+    let mut c = card(id);
+    c.max_hp = c.max_hp * (100 + perk as u32) / 100;
+    c.hp = c.max_hp;
+    c
+}
+
 pub fn card(id: u8) -> Card {
     let (hp, _, _, _) = card_data::stats(id);
     let max_hp = hp as u32 * 50;
@@ -131,7 +139,60 @@ pub struct Side {
     /// The deck this side brought: card ids in play order, an art skin for each, and the risk tier (crit rate).
     pub lineup: Vec<u8>,
     pub art: Vec<u8>,
+    /// Max-HP bonus in percent for each lineup slot, earned by unlocked rare pictures (see collection.rs).
+    pub perk: Vec<u8>,
     pub tier: u8,
+}
+
+/// A side as duels stored it before picture perks existed (no `perk` list). Only read, then converted.
+#[near(serializers = [borsh])]
+#[derive(Clone)]
+pub struct SideV1 {
+    pub active: Card,
+    pub bench: Vec<Card>,
+    pub hand: Vec<u8>,
+    pub points: u8,
+    pub faints: u8,
+    pub turns: u8,
+    pub lineup: Vec<u8>,
+    pub art: Vec<u8>,
+    pub tier: u8,
+}
+
+/// A duel as stored before picture perks existed. Duels already on chain are read through this and converted.
+#[near(serializers = [borsh])]
+#[derive(Clone)]
+pub struct DuelV1 {
+    pub sides: [SideV1; 2],
+    pub mover: u8,
+    pub turn: u32,
+    pub energy_used: bool,
+    pub retreated: bool,
+    pub winner: Option<u8>,
+    pub last_move_at: u64,
+    pub log: Vec<LogEntry>,
+}
+
+impl From<SideV1> for Side {
+    fn from(o: SideV1) -> Side {
+        Side { active: o.active, bench: o.bench, hand: o.hand, points: o.points, faints: o.faints, turns: o.turns, lineup: o.lineup, art: o.art, perk: vec![0; 8], tier: o.tier }
+    }
+}
+
+impl From<DuelV1> for Duel {
+    fn from(o: DuelV1) -> Duel {
+        let [a, b] = o.sides;
+        Duel { sides: [a.into(), b.into()], mover: o.mover, turn: o.turn, energy_used: o.energy_used, retreated: o.retreated, winner: o.winner, last_move_at: o.last_move_at, log: o.log }
+    }
+}
+
+#[cfg(test)]
+impl DuelV1 {
+    /// The old shape of a current duel (what the previous contract version would have stored).
+    pub fn from_current(d: &Duel) -> DuelV1 {
+        let side = |s: &Side| SideV1 { active: s.active.clone(), bench: s.bench.clone(), hand: s.hand.clone(), points: s.points, faints: s.faints, turns: s.turns, lineup: s.lineup.clone(), art: s.art.clone(), tier: s.tier };
+        DuelV1 { sides: [side(&d.sides[0]), side(&d.sides[1])], mover: d.mover, turn: d.turn, energy_used: d.energy_used, retreated: d.retreated, winner: d.winner, last_move_at: d.last_move_at, log: d.log.clone() }
+    }
 }
 
 /// One player's deck going into a duel: 8 distinct creature ids in play order (first leads, next 3 start on the bench,
@@ -141,13 +202,14 @@ pub struct Side {
 pub struct Setup {
     pub lineup: [u8; 8],
     pub art: [u8; 8],
+    pub perk: [u8; 8],
     pub tier: u8,
 }
 
 impl Setup {
     /// The starter deck for a tier, with default art.
     pub fn tier(tier: u8) -> Setup {
-        Setup { lineup: lineup(tier), art: [0; 8], tier: tier % 3 }
+        Setup { lineup: lineup(tier), art: [0; 8], perk: [0; 8], tier: tier % 3 }
     }
 }
 
@@ -173,9 +235,15 @@ pub fn check_deck(cards: &[u8], art: &[u8]) -> Result<(), &'static str> {
     Ok(())
 }
 
+/// The HP perk of the lineup slot holding creature `id`.
+fn perk_of(lineup: &[u8], perk: &[u8], id: u8) -> u8 {
+    lineup.iter().position(|x| *x == id).and_then(|i| perk.get(i).copied()).unwrap_or(0)
+}
+
 fn make_side(s: &Setup) -> Side {
     let l = s.lineup;
-    Side { active: card(l[0]), bench: l[1..4].iter().map(|i| card(*i)).collect(), hand: l[4..].to_vec(), points: 0, faints: 0, turns: 0, lineup: l.to_vec(), art: s.art.to_vec(), tier: s.tier }
+    let k = s.perk;
+    Side { active: card_perk(l[0], k[0]), bench: (1..4).map(|i| card_perk(l[i], k[i])).collect(), hand: l[4..].to_vec(), points: 0, faints: 0, turns: 0, lineup: l.to_vec(), art: s.art.to_vec(), perk: s.perk.to_vec(), tier: s.tier }
 }
 
 /// What a player can do on their turn. Stored in the log as `(action, arg)`.
@@ -573,10 +641,11 @@ impl Duel {
         let s = &mut self.sides[side];
         let no_cards_left = s.bench.is_empty() && s.hand.is_empty();
         if !no_cards_left {
-            s.active = if !s.bench.is_empty() { s.bench.remove(0) } else { card(s.hand.remove(0)) };
+            s.active = if !s.bench.is_empty() { s.bench.remove(0) } else { let id = s.hand.remove(0); card_perk(id, perk_of(&s.lineup, &s.perk, id)) };
             if !s.hand.is_empty() {
                 let next = s.hand.remove(0);
-                s.bench.push(card(next));
+                let k = perk_of(&s.lineup, &s.perk, next);
+                s.bench.push(card_perk(next, k));
             }
         }
         let (pa, pb) = (self.sides[0].points >= WIN_POINTS, self.sides[1].points >= WIN_POINTS);
@@ -905,14 +974,14 @@ mod tests {
 
     #[test]
     fn custom_decks_set_the_lineup_art_and_the_tier_crit() {
-        let guardian_cards_in_degen_deck = Setup { lineup: [0, 1, 2, 3, 4, 5, 6, 7], art: [5, 0, 7, 0, 0, 0, 0, 102], tier: 2 };
+        let guardian_cards_in_degen_deck = Setup { lineup: [0, 1, 2, 3, 4, 5, 6, 7], art: [5, 0, 7, 0, 0, 0, 0, 102], perk: [0; 8], tier: 2 };
         let d = Duel::with_decks(&guardian_cards_in_degen_deck, &Setup::tier(0), SEED, 0);
         assert_eq!(d.sides[0].tier, 2);
         assert_eq!(d.sides[0].lineup, vec![0, 1, 2, 3, 4, 5, 6, 7]);
         assert_eq!(d.sides[0].art, vec![5, 0, 7, 0, 0, 0, 0, 102]);
         assert_eq!(d.sides[0].active.id, 0);
         // a deck that leads with a different creature than its tier's default
-        let odd = Setup { lineup: [23, 0, 9, 14, 3, 5, 12, 20], art: [0; 8], tier: 1 };
+        let odd = Setup { lineup: [23, 0, 9, 14, 3, 5, 12, 20], art: [0; 8], perk: [0; 8], tier: 1 };
         let d = Duel::with_decks(&odd, &Setup::tier(1), SEED, 0);
         assert_eq!(d.sides[0].active.id, 23);
         assert_eq!(d.sides[0].bench.iter().map(|c| c.id).collect::<Vec<_>>(), vec![0, 9, 14]);
@@ -930,5 +999,25 @@ mod tests {
         assert_eq!(check_deck(&[0, 0, 1, 2, 3, 4, 5, 6], &[0; 8]), Err("cards must be different"));
         assert_eq!(check_deck(&[0, 1, 2, 3, 4, 5, 6, 24], &[0; 8]), Err("unknown card"));
         assert_eq!(check_deck(&ok, &[0, 0, 0, 0, 0, 0, 0, 103]), Err("unknown art"));
+    }
+
+    #[test]
+    fn a_perk_adds_max_hp_to_the_card_it_is_on_including_cards_that_come_in_later() {
+        let setup = Setup { lineup: [0, 1, 2, 3, 4, 5, 6, 7], art: [0; 8], perk: [5, 0, 0, 0, 0, 2, 0, 0], tier: 0 };
+        let mut d = Duel::with_decks(&setup, &Setup::tier(2), SEED, 0);
+        assert_eq!(d.sides[0].active.max_hp, 37 * 50 * 105 / 100);
+        assert_eq!(d.sides[0].active.hp, d.sides[0].active.max_hp);
+        assert_eq!(d.sides[0].bench[0].max_hp, 35 * 50); // no perk
+        // card 5 sits in hand with a +2% perk: when it comes up it has the bonus
+        assert_eq!(card_perk(5, 2).max_hp, 25 * 50 * 102 / 100);
+        d.sides[0].bench.clear();
+        d.sides[0].hand = vec![5];
+        d.sides[0].active = card(2); // not Pegshell, so the hit lands
+        d.sides[0].active.hp = 1;
+        d.mover = 1;
+        d.sides[1].active.energy = 5;
+        d.play(Action::Attack, 1, seed(5)).unwrap();
+        assert_eq!(d.sides[0].active.id, 5);
+        assert_eq!(d.sides[0].active.max_hp, 25 * 50 * 102 / 100);
     }
 }

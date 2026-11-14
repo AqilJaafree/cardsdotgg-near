@@ -1,0 +1,15 @@
+# Netlify: deploys the Next.js app (the game client). Contracts and the keeper are not deployed here.
+# This repo is a pnpm workspace, so in Netlify set Base directory = (empty, the repo root) and
+# Package directory = app. Paths below are relative to the repo root. Netlify adds its Next.js runtime by itself.
+[build]
+  command = "pnpm --filter cardsdotgg-app build"
+  publish = "app/.next"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+# Card art and pack images never change once published.
+[[headers]]
+  for = "/cards/*"
+  [headers.values]
+    Cache-Control = "public, max-age=604800, immutable"

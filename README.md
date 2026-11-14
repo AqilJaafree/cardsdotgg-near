@@ -355,21 +355,22 @@ The keeper's resolver (`pnpm resolve:watch`) only matters for the older auto-bat
 
 ## Deploy the app to Netlify
 
-The repo has a [`netlify.toml`](netlify.toml) for the Next.js app in `app/`. Netlify detects Next.js and adds its runtime by itself.
+The repo has an [`app/netlify.toml`](app/netlify.toml) for the Next.js app. This is a pnpm workspace, so Netlify builds it as a monorepo package. Netlify adds its Next.js runtime by itself.
 
-| Setting | Value |
+| Setting (Site configuration → Build & deploy) | Value |
 | --- | --- |
-| Base directory | `app` |
-| Build command | `pnpm build` (runs `scripts/sync-shared.mjs` first, which copies `shared/` into `app/lib/shared`) |
-| Publish directory | `.next` |
+| Base directory | *(empty: the repo root)* |
+| Package directory | `app` |
+| Build command | `pnpm --filter cardsdotgg-app build` (from `app/netlify.toml`; runs `scripts/sync-shared.mjs` first, which copies `shared/` into `app/lib/shared`) |
+| Publish directory | `app/.next` |
 | Node | 22 |
 | Environment variables | None. Contract addresses come from `shared/addresses.json`; the listing and NEAR Intents APIs need no keys. |
 
-1. In Netlify, **Add new site → Import an existing project** and pick this repository. The settings above are read from `netlify.toml`.
-2. Deploy. Every page is static except `/match/[id]`, which Netlify serves as a function.
+1. In Netlify, **Add new site → Import an existing project**, pick this repository, and choose the `cardsdotgg-app` package when Netlify asks which site to build. For an existing site, set the two directories above by hand.
+2. Deploy. Every page is static except `/match/[id]`, which Netlify serves from its Next.js server function.
 3. After the first deploy, set the NFT image base so wallets can show the White Flare photos: `cd keeper && NFT_BASE_URI=https://<your-site>.netlify.app pnpm set-nft-config`.
 
-Checked locally with `pnpm build` (16 routes, no errors).
+**Why `outputFileTracingRoot`:** `app/next.config.mjs` traces server files from the repo root. Without it, Next only traces inside `app/`, but pnpm installs `next` and `react` at the root, so Netlify's server function shipped without them and crashed with `Cannot find module 'next/dist/server/lib/start-server.js'`. Checked with `netlify build`: the function now includes them.
 
 ## Where Rhea data is used
 

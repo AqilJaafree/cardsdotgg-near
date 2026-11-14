@@ -9,6 +9,7 @@ import { A, cards, TIERS } from "@/lib/contracts";
 import { cardById, catalog, decks as deckArt } from "@/lib/game/catalog";
 import { defaultArt, fresh, starterCards, type DeckCardsJson } from "@/lib/game/duel";
 import { TGAS } from "@/lib/near";
+import { STARTER_PICS, hpBonus, useCollection } from "@/lib/game/useCollection";
 import { useDecks } from "@/lib/useDecks";
 import { useView } from "@/lib/useView";
 
@@ -25,6 +26,7 @@ function Builder() {
   const deck = live.find((d) => String(d.id) === wanted) ?? live[0];
   const saved = useView<DeckCardsJson>(A.game, "get_deck_cards", deck ? { deck_id: String(deck.id) } : undefined, { enabled: !!deck });
 
+  const col = useCollection();
   const [ids, setIds] = useState<number[]>([]);
   const [art, setArt] = useState<number[]>([]);
   const [open, setOpen] = useState<number | null>(null);          // slot being edited in the sheet
@@ -53,7 +55,7 @@ function Builder() {
   if (!deck) {
     return shell(<section className="qm-card gs-card"><h2>No deck yet</h2><p>You need a deck to change its cards.</p><Link className="cm-btn cm-play qm-btn" href="/deposit">GET COINS</Link></section>);
   }
-  // The view fails with MethodNotFound while the testnet contract is still the version without custom decks.
+  // The view fails with MethodNotFound while the testnet contract is still an older version.
   if (saved.error) {
     const old = /MethodNotFound|MethodResolveError/i.test(saved.error.message);
     return shell(
@@ -92,7 +94,9 @@ function Builder() {
   // Start on the deck's own category, unless every creature in it is already in the deck: then the first one with choices.
   const firstWithChoices = [tier, ...[0, 1, 2].filter((t) => t !== tier)].find((t) => cards.some((c) => c.tier === t && !ids.includes(c.id))) ?? 3;
   const shown = group ?? firstWithChoices;
+  const canUse = (c: { id: number; tier: number }) => c.tier === tier || col.creatures.has(c.id);
   const candidates = cards.filter((c) => !ids.includes(c.id) && (shown === 3 || c.tier === shown));
+  const lockedCount = cards.filter((c) => !ids.includes(c.id) && !canUse(c)).length;
 
   return (
     <GameScreen title="BUILD DECK">
@@ -154,7 +158,10 @@ function Builder() {
             </div>
             {candidates.length === 0
               ? <p className="gs-note">Every card in this group is already in your deck. Try another group.</p>
-              : <div className="db-pool">{candidates.map((c) => <CreatureCard key={c.id} size="sm" bare card={fresh(c.id)} onClick={() => replace(c.id)} label={`Swap in ${c.name}`} />)}</div>}
+              : <div className="db-pool">{candidates.map((c) => canUse(c)
+                  ? <CreatureCard key={c.id} size="sm" bare card={fresh(c.id)} onClick={() => replace(c.id)} label={`Swap in ${c.name}`} />
+                  : <div key={c.id} className="db-locked-card" role="img" aria-label={`${c.name}, locked`} title={`${c.name}: open packs to unlock`}><CreatureCard size="sm" bare card={fresh(c.id)} /><span className="db-lock" aria-hidden>🔒</span></div>)}</div>}
+            {lockedCount > 0 && <p className="gs-note">🔒 {lockedCount} creatures are locked. <Link href="/packs">Open packs</Link> to unlock them.</p>}
             {shown !== tier && <p className="gs-note">Your deck type stays {TIERS[tier]} ★, so your crit stays {CRIT[tier]}.</p>}
 
             <details className="db-look">
@@ -163,15 +170,21 @@ function Builder() {
               <div className="gs-seg four" role="tablist" aria-label="Picture group">
                 {PICS.map((p, i) => <button key={p.name} role="tab" aria-selected={pics === i} className={pics === i ? "on" : ""} onClick={() => setPics(i)}>{p.name}</button>)}
               </div>
+              <p className="gs-note">{col.usable.size} of {catalog.length} pictures unlocked. Pictures from packs add max HP to the card wearing them (rare +5%, uncommon +2%), once per deck. <Link href="/packs">Open packs</Link> to unlock more.</p>
               <div className="db-gallery">
                 <div {...tap(() => skin(0))} className={`db-tile ${art[open] === 0 ? "on" : ""}`} aria-label="Original picture" title="Original">
                   <img src={original.src} alt={original.name} loading="lazy" draggable={false} /><span className="db-tag">ORIGINAL</span>
                 </div>
-                {PICS[pics].list.filter((c) => c.id !== original.id).map((c) => (
-                  <div key={c.id} {...tap(() => skin(c.id))} className={`db-tile ${art[open] === c.id ? "on" : ""}`} aria-label={c.name} title={c.name}>
-                    <img src={c.src} alt={c.name} loading="lazy" draggable={false} />
-                  </div>
-                ))}
+                {PICS[pics].list.filter((c) => c.id !== original.id).map((c) => {
+                  const locked = !col.usable.has(c.id) && art[open] !== c.id;
+                  const perk = col.pictures.has(c.id) && !STARTER_PICS.has(c.id) ? hpBonus(c.id) : 0;
+                  const usedElsewhere = ids.some((_, k) => k !== open && art[k] === c.id);
+                  return locked
+                    ? <div key={c.id} role="img" className="db-tile locked" aria-label={`${c.name}, locked`} title={`${c.name}: open packs to unlock`}><img src={c.src} alt="" loading="lazy" draggable={false} /><span className="db-lock" aria-hidden>🔒</span></div>
+                    : usedElsewhere
+                      ? <div key={c.id} role="img" className="db-tile locked" aria-label={`${c.name}, already on another card`} title="Already used on another card in this deck"><img src={c.src} alt="" loading="lazy" draggable={false} /><span className="db-lock" aria-hidden>✓</span></div>
+                      : <div key={c.id} {...tap(() => skin(c.id))} className={`db-tile ${art[open] === c.id ? "on" : ""}`} aria-label={perk ? `${c.name}, +${perk}% HP` : c.name} title={perk ? `${c.name}: +${perk}% max HP` : c.name}><img src={c.src} alt={c.name} loading="lazy" draggable={false} />{perk > 0 && <span className="db-perk">+{perk}%</span>}</div>;
+                })}
               </div>
             </details>
           </section>

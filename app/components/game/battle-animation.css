@@ -661,3 +661,49 @@ body:has(.game-menu) .modal-backdrop{z-index:260}
 /* Lobby copy: the deck line reads as a small tag, the rest as short sentences */
 .qm-card .qm-deck { display: inline-block; align-self: center; padding: 4px 14px; border-radius: 999px; border: 2px solid #3b1d0e; background: #fffaf0; color: #3b1d0e; font: 400 16px "Lilita One", system-ui, sans-serif; }
 .qm-card .qm-deck + p { font-size: 15px; color: #3b1d0e; }
+
+/* Pack room: readable on the night sky, bigger tabs, one way back */
+.pack-room-top { justify-content: flex-end; }
+.pack-title .eyebrow { color: #ffe9b0; font-size: 12px; letter-spacing: .16em; font-weight: 800; text-shadow: 0 1px 0 #000a; }
+.pack-title h1 { color: #fff; text-shadow: 0 2px 0 #3b1d0e, 0 0 14px #0008; font-family: "Lilita One", system-ui, sans-serif; font-weight: 400; letter-spacing: .01em; }
+.pack-title > p { font-size: 15px; color: #f3eaff; text-shadow: 0 1px 0 #000a, 0 0 8px #000a; }
+.pack-type-tabs { gap: 8px; }
+.pack-type-tabs button { min-height: 44px; padding: 8px 16px !important; font-size: 16px !important; display: inline-flex; align-items: center; gap: 8px; color: #5a2e12; }
+.pack-type-tabs button > span { width: 10px; height: 10px; border-radius: 50%; border: 2px solid #3b1d0e; flex: none; }
+.pack-type-tabs button:disabled { opacity: 1; filter: none; }
+.pack-type-tabs button:disabled:not(.selected) { opacity: .6; }
+.pack-phase-sealed .pack-type-tabs, .pack-phase-opening .pack-type-tabs { opacity: .75; }
+.pack-actions > small, .pack-actions small { font-size: 13px; color: #f3eaff; text-shadow: 0 1px 0 #000a; }
+.pack-actions .text-button { font-size: 14px; color: #ffe9b0; text-decoration: underline; }
+.pack-picker > span { font-size: 14px; color: #fff; text-shadow: 0 1px 0 #000a; }
+.pack-disclaimer { font-size: 12px !important; color: #e4d9f5 !important; text-shadow: 0 1px 0 #000a; max-width: 320px !important; margin: 18px auto 12px !important; }
+.pack-room .round-button { width: 44px; height: 44px; border: 3px solid #3b1d0e; background: linear-gradient(#f2dfb4, #d1b07a); color: #5a2e12; box-shadow: 0 3px 0 #3b1d0e; }
+.pack-room .local-badge { font-size: 12px; padding: 7px 12px; }
+.rip-guide small { font-size: 11px; }
+
+/* Unlocking pictures */
+.result-card { position: relative; }
+.new-badge { position: absolute; top: -6px; right: -4px; z-index: 2; padding: 2px 8px; border-radius: 999px; border: 2px solid #3b1d0e; background: linear-gradient(#ffe27a, #f29a1d); color: #fff; font: 400 12px "Lilita One", system-ui, sans-serif; text-shadow: 1px 1px 0 #3b1d0e; box-shadow: 0 2px 0 #3b1d0e; animation: newPop .5s ease both; }
+@keyframes newPop { from { transform: scale(.4) rotate(-12deg); opacity: 0; } to { transform: none; opacity: 1; } }
+.unlock-meter { position: relative; width: min(86%, 320px); height: 26px; margin: 6px auto 4px; border-radius: 999px; border: 3px solid #3b1d0e; background: #2a1810; overflow: hidden; }
+.unlock-meter i { position: absolute; inset: 0 auto 0 0; background: linear-gradient(#b4ec7a, #4fa626); transition: width .6s ease; }
+.unlock-meter b { position: relative; display: block; text-align: center; font: 400 14px/20px "Lilita One", system-ui, sans-serif; color: #fff; text-shadow: 1px 1px 0 #3b1d0e; }
+.db-tile.locked { cursor: default; }
+.db-tile.locked img { filter: grayscale(1) brightness(.45); }
+.db-lock { position: absolute; inset: 0; display: grid; place-items: center; font-size: 22px; line-height: 1; }
+.gs-note a { color: #b8651b; font-weight: 700; }
+@media (prefers-reduced-motion: reduce) { .new-badge { animation: none; } .unlock-meter i { transition: none; } }
+
+.db-perk { position: absolute; left: 0; right: 0; bottom: 0; padding: 2px 0; background: #2e7d1fdd; color: #fff; font: 400 11px "Lilita One", system-ui, sans-serif; text-align: center; line-height: 1.2; }
+.db-locked-card { position: relative; width: 100%; max-width: 76px; }
+.db-locked-card .cc { filter: grayscale(1) brightness(.5); pointer-events: none; }
+
+/* Packs are purchases now */
+.pack-err { display: block; margin-top: 6px; color: #ffd9d9 !important; text-shadow: 0 1px 0 #000a; }
+.pack-err a { color: #ffe9b0; text-decoration: underline; }
+.new-creature { display: flex; align-items: center; gap: 12px; width: min(92%, 380px); margin: 8px auto; padding: 10px 12px; border-radius: 16px; border: 3px solid #3b1d0e; background: #fffaf0; color: #3b1d0e; text-align: left; box-shadow: 0 4px 0 #3b1d0e; }
+.new-creature .cc-md { width: 84px; flex: none; }
+.new-creature > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.new-creature b { font: 400 20px "Lilita One", system-ui, sans-serif; }
+.new-creature small { font-size: 12px; color: #6b4423; }
+.new-badge.inline { position: static; align-self: flex-start; animation: none; }

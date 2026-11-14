@@ -6,6 +6,7 @@
 //!
 //! Accounting invariant for tUSD held by this contract:
 //!   balance = reserve + liquidity[0] + total_principal[0] + prize_pool + sum(deck escrow) + sum(deck locked)
+pub mod arcade;
 pub mod card_data;
 pub mod collection;
 pub mod duel;
@@ -45,10 +46,32 @@ enum Msg {
     Deposit { tier: u8 },
     Reserve,
     Liquidity,
-    /// Legacy paid trial pack. Trial packs are free now (`open_pack`): this still opens one, and returns all the tUSD sent.
+    /// Retired: packs now open with arcade tickets. Refused (the tUSD is returned).
     Pack,
-    /// Buy one season pack (same price): one tokenized physical card, only while the season is open and cards are left.
+    /// Retired: the season pack now opens with a Season Ticket from the claw machine. Refused (the tUSD is returned).
     SeasonPack,
+    /// One paid claw play (`arcade::CLAW_PRICE` tUSD); its result, reported after the game, makes a Season Ticket.
+    ArcadeClaw,
+}
+
+#[derive(Serialize)]
+#[serde(crate = "near_sdk::serde")]
+pub struct TicketsView {
+    pub pack: u32,
+    pub season_win: u32,
+    pub season_lose: u32,
+    pub claw_pending: u32,
+    /// Free Stacker tickets still available today (UTC).
+    pub free_left: u8,
+}
+
+#[derive(Serialize)]
+#[serde(crate = "near_sdk::serde")]
+pub struct ArcadeInfo {
+    pub claw_price: U128,
+    pub free_per_day: u8,
+    pub win_rare_bps: u64,
+    pub lose_rare_bps: u64,
 }
 
 #[derive(Serialize)]
@@ -68,6 +91,8 @@ pub struct RwaTokenView {
     pub owner: Option<AccountId>,
     pub minted_at: Option<u64>,
     pub redeemed: bool,
+    /// Printed rarity Uncommon or above: drawn with the claw's rare odds.
+    pub rare: bool,
 }
 
 #[derive(Serialize)]
@@ -370,34 +395,16 @@ impl Game {
             Msg::Liquidity => {
                 self.liquidity[asset as usize] += amount.0;
             }
-            Msg::Pack => {
-                self.open_trial_pack(&sender_id);
-                return PromiseOrValue::Value(amount); // free now: everything sent comes back
-            }
-            Msg::SeasonPack => {
-                require!(asset == TUSD, "packs cost tUSD");
-                let season = Self::season_of().unwrap_or_else(|| env::panic_str("no season is set"));
-                require!(season.is_open(now()), "the season pack is not open");
-                require!(amount.0 >= collection::PACK_PRICE, "a pack costs 2 tUSD");
-                let mut stock = Self::rwa_stock_of();
-                require!(stock.remaining() > 0, "the season pack is sold out");
-                // The season pack holds exactly one physical card from the stock, minted to the buyer as a one-of-one
-                // token. Nothing else: no pictures, no creature.
-                let mut input = Vec::with_capacity(80);
-                input.extend_from_slice(b"season");
-                input.extend_from_slice(sender_id.as_bytes());
-                input.extend_from_slice(&[stock.remaining()]);
-                input.extend_from_slice(&env::random_seed());
-                let seed = env::keccak256_array(&input);
-                let token_id = stock.draw(&seed).unwrap();
-                Self::rwa_stock_put(&stock);
-                let mut tokens = Self::rwa_tokens();
-                tokens.insert(token_id, rwa::Token { owner: sender_id.clone(), minted_at: now(), redeemed: false });
-                tokens.flush();
-                self.prize_pool += collection::PACK_PRICE;
-                env::log_str(&format!("SeasonPackOpened {} rwa:{}", sender_id, token_id));
-                nft::emit("nft_mint", near_sdk::serde_json::json!({ "owner_id": sender_id, "token_ids": [token_id.to_string()] }));
-                return PromiseOrValue::Value(U128(amount.0 - collection::PACK_PRICE));
+            Msg::Pack | Msg::SeasonPack => env::panic_str("packs open with arcade tickets: play the arcade first"),
+            Msg::ArcadeClaw => {
+                require!(asset == TUSD, "the claw costs tUSD");
+                require!(amount.0 >= arcade::CLAW_PRICE, "a claw play costs 2 tUSD");
+                let mut t = Self::tickets_of(&sender_id);
+                t.claw_pending += 1;
+                Self::tickets_put(&sender_id, &t);
+                self.prize_pool += arcade::CLAW_PRICE; // the play goes to the prize pool; the accounting invariant holds
+                env::log_str(&format!("ClawPlay {}", sender_id));
+                return PromiseOrValue::Value(U128(amount.0 - arcade::CLAW_PRICE));
             }
         }
         PromiseOrValue::Value(U128(0))
@@ -622,20 +629,96 @@ impl Game {
         CollectionView { creatures: c.creature_list(), pictures: c.picture_list(), opened: c.opened, last_pack: c.last.clone() }
     }
 
-    /// Open one trial pack (Guardian, Balanced or Degen art), free for every account: 5 trial pictures and 1 creature.
-    /// Only gas is paid. Season packs, which hold real physical cards, still cost tUSD.
+    /// Open one trial pack (5 trial pictures and 1 creature) with a Pack Ticket from free play.
     pub fn open_pack(&mut self) -> collection::Pack {
-        self.open_trial_pack(&env::predecessor_account_id())
+        let who = env::predecessor_account_id();
+        let mut t = Self::tickets_of(&who);
+        require!(t.pack > 0, "no pack ticket: play Stacker in the arcade first");
+        t.pack -= 1;
+        Self::tickets_put(&who, &t);
+        self.open_trial_pack(&who)
     }
 
-    /// Price of one trial pack in tUSD base units: 0, trial packs are free.
+    /// Open the White Flare season pack with a Season Ticket (won tickets first): one physical card, minted as an NFT.
+    /// A won ticket draws a rare card with 75% chance, a lost one with 25%, using the block's random seed.
+    pub fn open_season_pack(&mut self) -> U64 {
+        let who = env::predecessor_account_id();
+        let season = Self::season_of().unwrap_or_else(|| env::panic_str("no season is set"));
+        require!(season.is_open(now()), "the season pack is not open");
+        let mut stock = Self::rwa_stock_of();
+        require!(stock.remaining() > 0, "the season pack is sold out");
+        let mut t = Self::tickets_of(&who);
+        let won = t.take_season().unwrap_or_else(|e| env::panic_str(e));
+        Self::tickets_put(&who, &t);
+        let mut input = Vec::with_capacity(80);
+        input.extend_from_slice(b"season");
+        input.extend_from_slice(who.as_bytes());
+        input.extend_from_slice(&[stock.remaining()]);
+        input.extend_from_slice(&env::random_seed());
+        let seed = env::keccak256_array(&input);
+        let bps = if won { arcade::WIN_RARE_BPS } else { arcade::LOSE_RARE_BPS };
+        let (token_id, rare) = arcade::draw_weighted(stock.total(), stock.sold, Self::rwa_rare_bits(), bps, &seed).unwrap();
+        stock.sold |= 1 << token_id;
+        Self::rwa_stock_put(&stock);
+        let mut tokens = Self::rwa_tokens();
+        tokens.insert(token_id, rwa::Token { owner: who.clone(), minted_at: now(), redeemed: false });
+        tokens.flush();
+        env::log_str(&format!("SeasonPackOpened {} rwa:{} rare:{} won:{}", who, token_id, rare, won));
+        nft::emit("nft_mint", near_sdk::serde_json::json!({ "owner_id": who, "token_ids": [token_id.to_string()] }));
+        U64(token_id as u64)
+    }
+
+    // ----------------------------------------------------------------- arcade
+
+    /// A free Stacker play: earns one Pack Ticket, up to 3 per account per UTC day. Returns whether a ticket was earned.
+    pub fn arcade_free_play(&mut self) -> bool {
+        let who = env::predecessor_account_id();
+        let mut t = Self::tickets_of(&who);
+        let earned = t.free_play(now() / 86_400);
+        if earned {
+            Self::tickets_put(&who, &t);
+            env::log_str(&format!("FreePlay {} pack_tickets:{}", who, t.pack));
+        }
+        earned
+    }
+
+    /// Report a paid claw play's result (the player's skill): it becomes a Season Ticket with the matching rare odds.
+    pub fn arcade_claw_result(&mut self, won: bool) {
+        let who = env::predecessor_account_id();
+        let mut t = Self::tickets_of(&who);
+        t.claw_result(won).unwrap_or_else(|e| env::panic_str(e));
+        Self::tickets_put(&who, &t);
+        env::log_str(&format!("ClawResult {} won:{}", who, won));
+    }
+
+    pub fn get_tickets(&self, account_id: AccountId) -> TicketsView {
+        let t = Self::tickets_of(&account_id);
+        TicketsView { pack: t.pack, season_win: t.season_win, season_lose: t.season_lose, claw_pending: t.claw_pending, free_left: t.free_left(now() / 86_400) }
+    }
+
+    pub fn arcade_info(&self) -> ArcadeInfo {
+        ArcadeInfo { claw_price: U128(arcade::CLAW_PRICE), free_per_day: arcade::FREE_TICKETS_PER_DAY, win_rare_bps: arcade::WIN_RARE_BPS, lose_rare_bps: arcade::LOSE_RARE_BPS }
+    }
+
+    /// Owner only: which stock cards are rare (printed Uncommon or above), by token id.
+    pub fn set_rwa_rare(&mut self, ids: Vec<u8>) {
+        self.assert_owner();
+        let total = Self::rwa_stock_of().total();
+        require!(ids.iter().all(|i| *i < total), "unknown token id");
+        let bits = ids.iter().fold(0u32, |b, i| b | 1 << i);
+        let mut map = LookupMap::<u8, u32>::new(b"v");
+        map.insert(0, bits);
+        map.flush();
+    }
+
+    /// Price of one trial pack in tUSD base units: 0, it opens with a free Pack Ticket.
     pub fn pack_price(&self) -> U128 {
         U128(0)
     }
 
-    /// Price of one season pack (one tokenized physical card) in tUSD base units (6 decimals).
+    /// What a season pack costs: one claw play (2 tUSD), which earns its Season Ticket.
     pub fn season_pack_price(&self) -> U128 {
-        U128(collection::PACK_PRICE)
+        U128(arcade::CLAW_PRICE)
     }
 
     /// Owner only: set the limited-time season (unix seconds). The season pack sells only while start <= now < end.
@@ -971,6 +1054,22 @@ impl Game {
         map.flush();
     }
 
+    /// Arcade tickets live under prefix "t" (account id).
+    fn tickets_of(who: &AccountId) -> arcade::Tickets {
+        LookupMap::<AccountId, arcade::Tickets>::new(b"t").get(who).cloned().unwrap_or_default()
+    }
+
+    fn tickets_put(who: &AccountId, t: &arcade::Tickets) {
+        let mut map = LookupMap::<AccountId, arcade::Tickets>::new(b"t");
+        map.insert(who.clone(), t.clone());
+        map.flush();
+    }
+
+    /// Rare stock cards as a bitmap (prefix "v", key 0).
+    fn rwa_rare_bits() -> u32 {
+        LookupMap::<u8, u32>::new(b"v").get(&0).copied().unwrap_or(0)
+    }
+
     /// Draw a trial pack for `who` and add it to their collection.
     fn open_trial_pack(&mut self, who: &AccountId) -> collection::Pack {
         let mut col = self.collection_of(who);
@@ -1008,6 +1107,7 @@ impl Game {
             owner: t.as_ref().map(|t| t.owner.clone()),
             minted_at: t.as_ref().map(|t| t.minted_at),
             redeemed: t.map_or(false, |t| t.redeemed),
+            rare: Self::rwa_rare_bits() >> id & 1 == 1,
         }
     }
 

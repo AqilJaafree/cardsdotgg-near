@@ -494,40 +494,72 @@ fn buy_pack(g: &mut Game, who: &str, amount: u128, secs: u64) -> u128 {
 }
 
 #[test]
-fn trial_packs_are_free_for_every_account_and_unlock_cards() {
+fn free_stacker_plays_earn_three_pack_tickets_a_day_and_each_opens_a_trial_pack() {
     let mut g = game();
     assert_eq!(g.pack_price().0, 0);
-    assert_eq!(g.season_pack_price().0, collection::PACK_PRICE);
     let pool = g.prize_pool().0;
-    // any account opens one with no payment, only the call
     testing_env!(ctx("alice.near", 101, T0 + 5).build());
+    // no ticket, no pack
+    assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| g.open_pack())).is_err());
+    assert_eq!(g.get_tickets(acc("alice.near")).free_left, 3);
+    assert!(g.arcade_free_play() && g.arcade_free_play() && g.arcade_free_play());
+    assert!(!g.arcade_free_play(), "the fourth free play today earns nothing");
+    let t = g.get_tickets(acc("alice.near"));
+    assert_eq!((t.pack, t.free_left), (3, 0));
     let pack = g.open_pack();
     let c = g.get_collection(acc("alice.near"));
-    assert_eq!(c.opened, 1);
-    assert_eq!(c.last_pack.clone().unwrap(), pack);
-    assert!(c.creatures.contains(&pack.creature));
-    assert!(pack.pictures.iter().all(|p| c.pictures.contains(p)));
-    assert_eq!(g.prize_pool().0, pool, "nothing is paid, so the prize pool does not change");
-    // a second one differs (the counter is part of the seed) and the totals only grow
-    let again = g.open_pack();
-    assert_ne!(again, pack);
-    let d = g.get_collection(acc("alice.near"));
-    assert_eq!(d.opened, 2);
-    assert!(d.pictures.len() >= c.pictures.len() && d.creatures.len() >= c.creatures.len());
-    // someone else is unaffected, and can open their own
-    assert_eq!(g.get_collection(acc("bob.near")).opened, 0);
+    assert_eq!((c.opened, c.last_pack.clone().unwrap()), (1, pack.clone()));
+    assert!(c.creatures.contains(&pack.creature) && pack.pictures.iter().all(|p| c.pictures.contains(p)));
+    assert_eq!(g.get_tickets(acc("alice.near")).pack, 2);
+    assert_ne!(g.open_pack(), pack);
+    assert_eq!(g.prize_pool().0, pool, "free play pays nothing in");
+    // a new UTC day gives 3 more; bob has his own
+    testing_env!(ctx("alice.near", 102, T0 + 86_400).build());
+    assert_eq!(g.get_tickets(acc("alice.near")).free_left, 3);
     testing_env!(ctx("bob.near", 102, T0 + 6).build());
-    g.open_pack();
-    assert_eq!(g.get_collection(acc("bob.near")).opened, 1);
+    assert!(g.arcade_free_play());
+    assert_eq!(g.get_tickets(acc("bob.near")).pack, 1);
 }
 
 #[test]
-fn an_old_style_paid_trial_pack_still_opens_but_returns_all_the_tusd() {
+fn packs_can_no_longer_be_bought_directly_with_tusd() {
     let mut g = game();
-    let pool = g.prize_pool().0;
-    assert_eq!(buy_pack(&mut g, "alice.near", 2_000_000, T0 + 5), 2_000_000);
-    assert_eq!(g.get_collection(acc("alice.near")).opened, 1);
-    assert_eq!(g.prize_pool().0, pool);
+    assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| buy_pack(&mut g, "alice.near", 2_000_000, T0 + 5))).is_err());
+    testing_env!(ctx("tusd.near", 100, T0).build());
+    assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| g.ft_on_transfer(acc("alice.near"), U128(2_000_000), r#"{"action":"season_pack"}"#.into()))).is_err());
+    assert_eq!(g.get_collection(acc("alice.near")).opened, 0);
+}
+
+#[test]
+fn a_paid_claw_play_becomes_a_season_ticket_whose_result_sets_the_rare_odds() {
+    let mut g = game();
+    testing_env!(ctx("owner.near", 120, T0).build());
+    g.set_season("White Flare".into(), U64(T0), U64(T0 + 60 * 86400));
+    g.set_rwa_stock((0..23).map(|i| format!("SV11W {i:03} card")).collect());
+    g.set_rwa_rare(vec![1, 6, 10, 11, 13, 16, 18, 22]);
+    assert!(g.rwa_all().iter().filter(|t| t.rare).count() == 8);
+    assert_eq!(g.arcade_info().claw_price.0, 2_000_000);
+    // underpaying or paying in tNEAR is refused
+    testing_env!(ctx("tusd.near", 121, T0 + 1).build());
+    assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| g.ft_on_transfer(acc("alice.near"), U128(1_999_999), r#"{"action":"arcade_claw"}"#.into()))).is_err());
+    // no result to report, no season ticket to use
+    testing_env!(ctx("alice.near", 121, T0 + 1).build());
+    assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| g.arcade_claw_result(true))).is_err());
+    assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| g.open_season_pack())).is_err());
+    // pay, play (lost), report: one losing season ticket
+    let pool = g.prize_pool;
+    testing_env!(ctx("tusd.near", 122, T0 + 2).build());
+    g.ft_on_transfer(acc("alice.near"), U128(2_000_000), r#"{"action":"arcade_claw"}"#.into());
+    assert_eq!(g.prize_pool, pool + 2_000_000);
+    assert_eq!(g.get_tickets(acc("alice.near")).claw_pending, 1);
+    testing_env!(ctx("alice.near", 123, T0 + 3).build());
+    g.arcade_claw_result(false);
+    let t = g.get_tickets(acc("alice.near"));
+    assert_eq!((t.claw_pending, t.season_win, t.season_lose), (0, 0, 1));
+    let id = g.open_season_pack().0 as u8;
+    assert_eq!(g.nft_token(id.to_string()).unwrap().owner_id, acc("alice.near"));
+    assert_eq!(g.get_tickets(acc("alice.near")).season_lose, 0);
+    assert_eq!(g.rwa_stock().remaining, 22);
 }
 
 #[test]
@@ -598,16 +630,22 @@ fn a_duel_stored_before_perks_existed_still_loads_and_can_be_played_on() {
 
 // ------------------------------------------------------------------ season pack
 
+/// A paid claw play (won), its result, then opening the season pack with the Season Ticket. Returns the claw refund.
 fn buy_season(g: &mut Game, who: &str, amount: u128, secs: u64) -> u128 {
     testing_env!(ctx("tusd.near", 130, secs).build());
-    match g.ft_on_transfer(acc(who), U128(amount), r#"{"action":"season_pack"}"#.into()) {
+    let refund = match g.ft_on_transfer(acc(who), U128(amount), r#"{"action":"arcade_claw"}"#.into()) {
         PromiseOrValue::Value(v) => v.0,
         _ => panic!("expected a value"),
-    }
+    };
+    testing_env!(ctx(who, 130, secs).build());
+    g.arcade_claw_result(true);
+    testing_env!(ctx(who, 131, secs).build());
+    g.open_season_pack();
+    refund
 }
 
 #[test]
-fn the_season_pack_sells_only_inside_its_window_and_drops_season_pictures() {
+fn the_season_pack_opens_only_inside_its_window_and_mints_one_card() {
     let mut g = game();
     let start = T0 + 100;
     let end = start + 60 * 24 * 3600;

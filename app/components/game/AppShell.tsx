@@ -14,7 +14,7 @@ export default function AppShell({children}:{children:React.ReactNode}){
   const address=accountId,isConnected=!!accountId,authenticated=!!accountId||path==="/";
   const [walletOpen,setWalletOpen]=useState(false);
   // Every screen but the home arena (which holds the offline practice mode) needs a connected wallet.
-  if(!authenticated)return <><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lilita+One&display=swap"/>
+  if(!authenticated)return <><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Lilita+One&display=swap"/>
     <div className="wallet-gate">
       <img className="wallet-gate-logo" src="/cardsdotgg-logo.jpg" alt="Cardsdotgg: collect, build, battle" draggable={false}/>
       <div className="wallet-gate-card">
@@ -24,7 +24,7 @@ export default function AppShell({children}:{children:React.ReactNode}){
         <small className="wallet-gate-note">Use a NEAR testnet wallet such as MyNearWallet or HOT. Test tokens have no real value.</small>
       </div>
     </div></>;
-  return <><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lilita+One&display=swap"/><header className="site-header"><Link className="brand-lockup" href="/" aria-label="Cardsdotgg home"><span className="brand-icon"><Layers size={23} strokeWidth={1.7}/></span><b>Cardsdotgg</b></Link><nav className="desktop-nav" aria-label="Main navigation">{links.map(({href,name,icon:Icon})=><Link className={(href==="/decks"?!game:path===href)?"active":""} href={href} key={href}><Icon size={16}/>{name}</Link>)}</nav><div className="header-right"><span className="network-label"><span/>NEAR TESTNET</span><button className="wallet-button" onClick={()=>setWalletOpen(true)}><Wallet size={15}/><span>{isConnected?address!.length>18?`${address!.slice(0,8)}…${address!.slice(-6)}`:address!:"Connect wallet"}</span><ChevronDown size={12}/></button></div></header>
+  return <><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Lilita+One&display=swap"/><header className="site-header"><Link className="brand-lockup" href="/" aria-label="Cardsdotgg home"><span className="brand-icon"><Layers size={23} strokeWidth={1.7}/></span><b>Cardsdotgg</b></Link><nav className="desktop-nav" aria-label="Main navigation">{links.map(({href,name,icon:Icon})=><Link className={(href==="/decks"?!game:path===href)?"active":""} href={href} key={href}><Icon size={16}/>{name}</Link>)}</nav><div className="header-right"><span className="network-label"><span/>NEAR TESTNET</span><button className="wallet-button" onClick={()=>setWalletOpen(true)}><Wallet size={15}/><span>{isConnected?address!.length>18?`${address!.slice(0,8)}…${address!.slice(-6)}`:address!:"Connect wallet"}</span><ChevronDown size={12}/></button></div></header>
     <main className={game||screens?"game-main":"legacy-main"}>{game||screens?children:<NetworkGuard>{children}</NetworkGuard>}</main>
     <footer className="site-footer"><span><span className="footer-mark">◇</span> A little strategy. A little magic.</span><span>Cardsdotgg · Local preview<span className="footer-dot"/>Built on NEAR<ArrowUpRight size={11}/></span></footer>
     <nav className="mobile-nav" aria-label="Mobile navigation">{links.map(({href,name,icon:Icon})=><Link className={(href==="/decks"?!game:path===href)?"active":""} href={href} key={href}><Icon size={20}/><span>{name}</span></Link>)}</nav>

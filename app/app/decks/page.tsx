@@ -55,7 +55,8 @@ export default function MyDecks() {
             {live.map((d, i) => (
               <div className="dk-slide" key={String(d.id)} role="group" aria-roledescription="slide" aria-label={`Deck ${i + 1} of ${n}`}>
                 <section className="qm-card gs-card">
-                  <h2>Deck #{String(d.id)}</h2>
+                  <h2>Deck #{String(d.id)} <span className="trial-tag">Trial</span></h2>
+                  <p className="trial-note">A trial deck with placeholder cards. The real card set is coming soon.</p>
                   <DeckHero tier={d.tier} title={`${TIERS[d.tier].toUpperCase()} · ${LOOK[d.tier]}`} />
                   <div className="gs-chips">
                     <div className="gs-chip"><small>Coins in your deck</small><b>{fmtAmount(d.asset, d.principal)} {ASSETS[d.asset]}</b></div>

@@ -64,7 +64,7 @@ export default function Friends() {
         ) : (
           <>
             <select value={sel} onChange={(e) => setDeck(e.target.value)} aria-label="Your deck">
-              {live.map((d) => <option key={String(d.id)} value={String(d.id)}>{TIERS[d.tier]} deck #{String(d.id)}</option>)}
+              {live.map((d) => <option key={String(d.id)} value={String(d.id)}>{TIERS[d.tier]} trial deck #{String(d.id)}</option>)}
             </select>
             <input placeholder="Friend's account, or empty for anyone" value={friend} onChange={(e) => setFriend(e.target.value.trim())} aria-label="Friend's account" />
             {!friendOk && <p className="gs-warn">That doesn't look like a NEAR account name.</p>}

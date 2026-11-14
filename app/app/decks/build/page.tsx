@@ -170,7 +170,7 @@ function Builder() {
               <div className="gs-seg four" role="tablist" aria-label="Picture group">
                 {PICS.map((p, i) => <button key={p.name} role="tab" aria-selected={pics === i} className={pics === i ? "on" : ""} onClick={() => setPics(i)}>{p.name}</button>)}
               </div>
-              <p className="gs-note">{col.usable.size} of {catalog.length} pictures unlocked. Pictures from packs add max HP to the card wearing them (rare +5%, uncommon +2%), once per deck. <Link href="/packs">Open packs</Link> to unlock more.</p>
+              <p className="gs-note">{col.usable.size} of {catalog.length} trial pictures unlocked. Trial pictures from packs add max HP to the card wearing them (rare +5%, uncommon +2%), once per deck. <Link href="/packs">Open packs</Link> to unlock more.</p>
               <div className="db-gallery">
                 <div {...tap(() => skin(0))} className={`db-tile ${art[open] === 0 ? "on" : ""}`} aria-label="Original picture" title="Original">
                   <img src={original.src} alt={original.name} loading="lazy" draggable={false} /><span className="db-tag">ORIGINAL</span>
@@ -183,7 +183,7 @@ function Builder() {
                     ? <div key={c.id} role="img" className="db-tile locked" aria-label={`${c.name}, locked`} title={`${c.name}: open packs to unlock`}><img src={c.src} alt="" loading="lazy" draggable={false} /><span className="db-lock" aria-hidden>🔒</span></div>
                     : usedElsewhere
                       ? <div key={c.id} role="img" className="db-tile locked" aria-label={`${c.name}, already on another card`} title="Already used on another card in this deck"><img src={c.src} alt="" loading="lazy" draggable={false} /><span className="db-lock" aria-hidden>✓</span></div>
-                      : <div key={c.id} {...tap(() => skin(c.id))} className={`db-tile ${art[open] === c.id ? "on" : ""}`} aria-label={perk ? `${c.name}, +${perk}% HP` : c.name} title={perk ? `${c.name}: +${perk}% max HP` : c.name}><img src={c.src} alt={c.name} loading="lazy" draggable={false} />{perk > 0 && <span className="db-perk">+{perk}%</span>}</div>;
+                      : <div key={c.id} {...tap(() => skin(c.id))} className={`db-tile ${art[open] === c.id ? "on" : ""}`} aria-label={perk ? `${c.name}, +${perk}% HP` : c.name} title={perk ? `${c.name}: +${perk}% max HP` : c.name}><img src={c.src} alt={c.name} loading="lazy" draggable={false} />{perk > 0 && <span className="db-perk">Trial · +{perk}%</span>}</div>;
                 })}
               </div>
             </details>

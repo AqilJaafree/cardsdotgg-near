@@ -82,7 +82,7 @@ function QuickMatch() {
       body = <>
         <div className="qm-spinner" aria-hidden />
         <h2>Waiting for a player…</h2>
-        <p className="qm-deck">{TIERS[deck.tier]} deck #{String(deck.id)} is in the lobby</p>
+        <p className="qm-deck">{TIERS[deck.tier]} trial deck #{String(deck.id)} is in the lobby</p>
         <p>Stay on this screen. The fight starts as soon as another player joins.</p>
         <small>{left > 0 ? `No one yet? The lobby closes in ${Math.ceil(left / 60)} min.` : "The lobby has timed out."}</small>
         <TxButton label="LEAVE LOBBY" onConfirmed={refetch} request={{ receiverId: A.game, methodName: "cancel", args: { match_id: mine.id }, gas: TGAS(40) }} />
@@ -101,7 +101,7 @@ function QuickMatch() {
     body = <>
       <h2>Opponent found!</h2>
       <p className="qm-vs"><b>You</b> vs <b>{short(target.player_a)}</b></p>
-      <p className="qm-deck">Your {TIERS[deck.tier]} deck #{String(deck.id)} is ready</p>
+      <p className="qm-deck">Your {TIERS[deck.tier]} trial deck #{String(deck.id)} is ready</p>
       <p>A player is waiting in the lobby. Tap to join and the fight starts.</p>
       <small>You take turns. One approval now, then no pop-ups during the fight.</small>
       <TxButton label="JOIN BATTLE" withSession onConfirmed={refetch} onFailed={refetch} verify={async () => { const m = await view<MatchJson | null>(A.game, "get_match", { match_id: target.id }); return !!m && m.player_b === me && m.status !== 0; }} request={{ receiverId: A.game, methodName: "accept_duel", args: { match_id: target.id, deck_id: String(deck.id) }, gas: TGAS(60) }} />
@@ -109,7 +109,7 @@ function QuickMatch() {
   } else {
     body = <>
       <h2>Ready to battle?</h2>
-      <p className="qm-deck">Your {TIERS[deck.tier]} deck #{String(deck.id)}</p>
+      <p className="qm-deck">Your {TIERS[deck.tier]} trial deck #{String(deck.id)}</p>
       <p>Find a player to duel. Knock out 3 cards to win.</p>
       <small>One approval now, then no pop-ups during the fight.</small>
       <TxButton label="FIND OPPONENT" withSession onConfirmed={refetch} onFailed={refetch} verify={async () => { const rows = await view<MatchJson[]>(A.game, "recent_matches", { limit: 10 }); const t = Math.floor(Date.now() / 1000); return rows.some((m) => m.player_a === me && m.status === 0 && Number(m.created_at) >= t - 180); }} request={{ receiverId: A.game, methodName: "create_challenge", args: { deck_id: String(deck.id), opponent: null }, gas: TGAS(60) }} />

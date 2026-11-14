@@ -213,8 +213,8 @@ impl Setup {
     }
 }
 
-/// Highest art skin id (the app's reference image set is 1..=ART_MAX).
-pub const ART_MAX: u8 = 102;
+/// Highest art skin id: base pictures 1..=102, then the season pictures 103..=126.
+pub const ART_MAX: u8 = crate::collection::SEASON_LAST;
 
 /// Check a custom deck: 8 distinct creatures from the 24, art ids in range. Returns the refusal text, if any.
 pub fn check_deck(cards: &[u8], art: &[u8]) -> Result<(), &'static str> {
@@ -998,7 +998,8 @@ mod tests {
         assert!(check_deck(&ok, &[0; 7]).is_err());
         assert_eq!(check_deck(&[0, 0, 1, 2, 3, 4, 5, 6], &[0; 8]), Err("cards must be different"));
         assert_eq!(check_deck(&[0, 1, 2, 3, 4, 5, 6, 24], &[0; 8]), Err("unknown card"));
-        assert_eq!(check_deck(&ok, &[0, 0, 0, 0, 0, 0, 0, 103]), Err("unknown art"));
+        assert_eq!(check_deck(&ok, &[0, 0, 0, 0, 0, 0, 0, 127]), Err("unknown art"));
+        assert_eq!(check_deck(&ok, &[0, 0, 0, 0, 0, 0, 0, 126]), Ok(()));
     }
 
     #[test]

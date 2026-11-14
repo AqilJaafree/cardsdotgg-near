@@ -1,6 +1,7 @@
 //! Card collection: packs, owned creatures and pictures, and the rarity perk. Pure and deterministic given a seed.
 //!
-//! A pack costs `PACK_PRICE` tUSD and holds 5 pictures (2 common, 2 uncommon, 1 rare) plus 1 creature.
+//! A trial pack is free and holds 5 pictures (2 common, 2 uncommon, 1 rare) plus 1 creature. `PACK_PRICE` is the price
+//! of a season pack (one tokenized physical card).
 //! - Creatures: a deck can always use its own tier's 8 starter creatures; any other creature must be unlocked.
 //! - Pictures: a card's picture must be one of the 24 starter pictures (the art on each starter deck) or unlocked.
 //! - Perk: a picture unlocked from a pack adds max HP to the card wearing it (uncommon +2%, rare +5%). Starter pictures
@@ -10,8 +11,17 @@ use sha3::{Digest, Keccak256};
 
 /// 2 tUSD (6 decimals).
 pub const PACK_PRICE: u128 = 2_000_000;
-pub const PICTURES: u8 = 102; // picture ids 1..=102
+pub const PICTURES: u8 = 102; // base picture ids 1..=102
 pub const CREATURES: u8 = 24;
+
+/// Picture ids 103..=126 were briefly a season picture set (no longer dropped by any pack). They stay valid so the few
+/// collections and decks that hold one keep loading; nothing new can unlock them.
+pub const SEASON_FIRST: u8 = 103;
+pub const SEASON_LAST: u8 = 126;
+
+pub fn is_season_pic(p: u8) -> bool {
+    (SEASON_FIRST..=SEASON_LAST).contains(&p)
+}
 
 /// The picture on each starter creature, creature id order (tier 0, then 1, then 2): same ids as the app's `decks`.
 pub const STARTER_PICS: [u8; 24] = [15, 2, 1, 3, 13, 17, 30, 44, 14, 9, 16, 20, 21, 22, 58, 27, 4, 10, 12, 6, 8, 7, 5, 11];
@@ -23,8 +33,8 @@ pub fn is_starter_pic(p: u8) -> bool {
 /// 0 common, 1 uncommon, 2 rare. Same bands as the app: rare 1..=22, uncommon 23..=42, the rest common.
 pub fn rarity(pic: u8) -> u8 {
     match pic {
-        1..=22 => 2,
-        23..=42 => 1,
+        1..=22 | 103..=108 => 2,
+        23..=42 | 109..=116 => 1,
         _ => 0,
     }
 }
@@ -60,13 +70,13 @@ impl Collection {
         c < CREATURES && self.creatures >> c & 1 == 1
     }
     pub fn has_pic(&self, p: u8) -> bool {
-        p >= 1 && p <= PICTURES && self.pics >> p & 1 == 1
+        p >= 1 && p <= SEASON_LAST && self.pics >> p & 1 == 1
     }
     pub fn creature_list(&self) -> Vec<u8> {
         (0..CREATURES).filter(|c| self.has_creature(*c)).collect()
     }
     pub fn picture_list(&self) -> Vec<u8> {
-        (1..=PICTURES).filter(|p| self.has_pic(*p)).collect()
+        (1..=SEASON_LAST).filter(|p| self.has_pic(*p)).collect()
     }
     /// Add a pack's contents.
     pub fn add(&mut self, pack: &Pack) {
@@ -99,6 +109,21 @@ pub fn open(seed: [u8; 32]) -> Pack {
     let u2 = 23 + roll(&seed, 3, 20) as u8;
     let r = 1 + roll(&seed, 4, 22) as u8;
     Pack { pictures: [c1, c2, u1, u2, r], creature: roll(&seed, 5, CREATURES as u64) as u8 }
+}
+
+/// A limited-time season: the season pack can be bought only while `start <= now < end` (unix seconds).
+#[near(serializers = [borsh, json])]
+#[derive(Clone, Debug, PartialEq)]
+pub struct Season {
+    pub name: String,
+    pub start: u64,
+    pub end: u64,
+}
+
+impl Season {
+    pub fn is_open(&self, now: u64) -> bool {
+        self.start <= now && now < self.end
+    }
 }
 
 /// Is this deck allowed? `tier` gives the always-allowed starter creatures. Returns the refusal text.
@@ -149,6 +174,12 @@ mod tests {
             assert!(p.creature < CREATURES);
         }
         assert_ne!(open([1; 32]), open([2; 32]));
+    }
+
+    #[test]
+    fn a_season_is_open_only_inside_its_window() {
+        let s = Season { name: "White Flame".into(), start: 100, end: 200 };
+        assert!(!s.is_open(99) && s.is_open(100) && s.is_open(199) && !s.is_open(200));
     }
 
     #[test]

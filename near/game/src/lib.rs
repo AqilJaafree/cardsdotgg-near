@@ -11,6 +11,8 @@ pub mod collection;
 pub mod duel;
 pub mod elo;
 pub mod engine;
+pub mod nft;
+pub mod rwa;
 pub mod svg;
 
 use near_sdk::json_types::{U128, U64};
@@ -43,8 +45,40 @@ enum Msg {
     Deposit { tier: u8 },
     Reserve,
     Liquidity,
-    /// Buy one card pack: send at least `collection::PACK_PRICE` tUSD; any extra is returned.
+    /// Legacy paid trial pack. Trial packs are free now (`open_pack`): this still opens one, and returns all the tUSD sent.
     Pack,
+    /// Buy one season pack (same price): one tokenized physical card, only while the season is open and cards are left.
+    SeasonPack,
+}
+
+#[derive(Serialize)]
+#[serde(crate = "near_sdk::serde")]
+pub struct RwaStockView {
+    pub total: u8,
+    pub remaining: u8,
+}
+
+#[derive(Serialize)]
+#[serde(crate = "near_sdk::serde")]
+pub struct RwaTokenView {
+    pub id: u8,
+    /// What the token stands for, e.g. "SV11W 011 Tepig".
+    pub card: String,
+    /// None while the card is still in the pack stock.
+    pub owner: Option<AccountId>,
+    pub minted_at: Option<u64>,
+    pub redeemed: bool,
+}
+
+#[derive(Serialize)]
+#[serde(crate = "near_sdk::serde")]
+pub struct SeasonView {
+    pub name: String,
+    /// Unix seconds.
+    pub start: u64,
+    pub end: u64,
+    pub now: u64,
+    pub open: bool,
 }
 
 #[near(serializers = [borsh])]
@@ -337,18 +371,32 @@ impl Game {
                 self.liquidity[asset as usize] += amount.0;
             }
             Msg::Pack => {
+                self.open_trial_pack(&sender_id);
+                return PromiseOrValue::Value(amount); // free now: everything sent comes back
+            }
+            Msg::SeasonPack => {
                 require!(asset == TUSD, "packs cost tUSD");
+                let season = Self::season_of().unwrap_or_else(|| env::panic_str("no season is set"));
+                require!(season.is_open(now()), "the season pack is not open");
                 require!(amount.0 >= collection::PACK_PRICE, "a pack costs 2 tUSD");
-                let mut col = self.collection_of(&sender_id);
-                let mut input = Vec::with_capacity(72);
+                let mut stock = Self::rwa_stock_of();
+                require!(stock.remaining() > 0, "the season pack is sold out");
+                // The season pack holds exactly one physical card from the stock, minted to the buyer as a one-of-one
+                // token. Nothing else: no pictures, no creature.
+                let mut input = Vec::with_capacity(80);
+                input.extend_from_slice(b"season");
                 input.extend_from_slice(sender_id.as_bytes());
-                input.extend_from_slice(&col.opened.to_be_bytes());
+                input.extend_from_slice(&[stock.remaining()]);
                 input.extend_from_slice(&env::random_seed());
-                let pack = collection::open(env::keccak256_array(&input));
-                col.add(&pack);
-                self.collection_put(&sender_id, &col);
-                self.prize_pool += collection::PACK_PRICE; // the price goes to the prize pool; the accounting invariant holds
-                env::log_str(&format!("PackOpened {} {:?} {}", sender_id, pack.pictures, pack.creature));
+                let seed = env::keccak256_array(&input);
+                let token_id = stock.draw(&seed).unwrap();
+                Self::rwa_stock_put(&stock);
+                let mut tokens = Self::rwa_tokens();
+                tokens.insert(token_id, rwa::Token { owner: sender_id.clone(), minted_at: now(), redeemed: false });
+                tokens.flush();
+                self.prize_pool += collection::PACK_PRICE;
+                env::log_str(&format!("SeasonPackOpened {} rwa:{}", sender_id, token_id));
+                nft::emit("nft_mint", near_sdk::serde_json::json!({ "owner_id": sender_id, "token_ids": [token_id.to_string()] }));
                 return PromiseOrValue::Value(U128(amount.0 - collection::PACK_PRICE));
             }
         }
@@ -543,7 +591,7 @@ impl Game {
     }
 
     /// Pick the deck's 8 creatures (the first leads, the next 3 start on the bench, the last 4 in hand) and an art skin
-    /// for each (0 = default face, 1..=102 = a card image). Only the owner, and not while coins are staked.
+    /// for each (0 = default face, 1..=102 = a card image, 103..=126 = a season picture). Only the owner, and not while coins are staked.
     pub fn set_deck_cards(&mut self, deck_id: U64, cards: Vec<u8>, art: Vec<u8>) {
         let caller = env::predecessor_account_id();
         self.require_owned_active(deck_id.0, &caller);
@@ -574,9 +622,79 @@ impl Game {
         CollectionView { creatures: c.creature_list(), pictures: c.picture_list(), opened: c.opened, last_pack: c.last.clone() }
     }
 
-    /// Price of one pack in tUSD base units (6 decimals).
+    /// Open one trial pack (Guardian, Balanced or Degen art), free for every account: 5 trial pictures and 1 creature.
+    /// Only gas is paid. Season packs, which hold real physical cards, still cost tUSD.
+    pub fn open_pack(&mut self) -> collection::Pack {
+        self.open_trial_pack(&env::predecessor_account_id())
+    }
+
+    /// Price of one trial pack in tUSD base units: 0, trial packs are free.
     pub fn pack_price(&self) -> U128 {
+        U128(0)
+    }
+
+    /// Price of one season pack (one tokenized physical card) in tUSD base units (6 decimals).
+    pub fn season_pack_price(&self) -> U128 {
         U128(collection::PACK_PRICE)
+    }
+
+    /// Owner only: set the limited-time season (unix seconds). The season pack sells only while start <= now < end.
+    pub fn set_season(&mut self, name: String, start: U64, end: U64) {
+        self.assert_owner();
+        require!(end.0 > start.0, "the season must end after it starts");
+        require!(!name.is_empty() && name.len() <= 40, "season name is 1 to 40 characters");
+        let mut map = Self::seasons();
+        map.insert(0, collection::Season { name: name.clone(), start: start.0, end: end.0 });
+        map.flush();
+        env::log_str(&format!("SeasonSet {} {} {}", name, start.0, end.0));
+    }
+
+    /// Owner only: load the physical cards behind the season pack, one entry per card held (token id = index).
+    /// Allowed only while none has been pulled, so a minted token always points at the card it was sold as.
+    pub fn set_rwa_stock(&mut self, cards: Vec<String>) {
+        self.assert_owner();
+        require!(!cards.is_empty() && cards.len() <= rwa::MAX_CARDS, "1 to 32 cards");
+        require!(cards.iter().all(|c| !c.is_empty() && c.len() <= 64), "each card is 1 to 64 characters");
+        require!(Self::rwa_stock_of().sold == 0, "cards have already been pulled");
+        Self::rwa_stock_put(&rwa::Stock { cards: cards.clone(), sold: 0 });
+        env::log_str(&format!("RwaStockSet {}", cards.len()));
+    }
+
+    /// How many physical cards the season pack holds and how many are left.
+    pub fn rwa_stock(&self) -> RwaStockView {
+        let s = Self::rwa_stock_of();
+        RwaStockView { total: s.total(), remaining: s.remaining() }
+    }
+
+    /// Every token, minted or still in stock, in id order.
+    pub fn rwa_all(&self) -> Vec<RwaTokenView> {
+        let s = Self::rwa_stock_of();
+        (0..s.total()).map(|i| Self::rwa_view(&s, i)).collect()
+    }
+
+    /// The tokens an account holds (redeemed ones included, marked as such).
+    pub fn rwa_tokens_of(&self, account_id: AccountId) -> Vec<RwaTokenView> {
+        self.rwa_all().into_iter().filter(|t| t.owner.as_ref() == Some(&account_id)).collect()
+    }
+
+    /// Holder only: ask for the physical card. The token is marked redeemed for good; shipping is arranged off-chain.
+    pub fn rwa_redeem(&mut self, token_id: u8) {
+        let caller = env::predecessor_account_id();
+        let mut tokens = Self::rwa_tokens();
+        let mut t = tokens.get(&token_id).cloned().unwrap_or_else(|| env::panic_str("no such token"));
+        require!(t.owner == caller, "not the token holder");
+        require!(!t.redeemed, "already redeemed");
+        t.redeemed = true;
+        tokens.insert(token_id, t);
+        tokens.flush();
+        Self::approvals_put(token_id, &nft::Approvals { next_id: Self::approvals_of(token_id).next_id, accounts: vec![] });
+        env::log_str(&format!("RwaRedeemRequested {} {}", token_id, caller));
+        nft::emit("nft_burn", near_sdk::serde_json::json!({ "owner_id": caller, "token_ids": [token_id.to_string()] }));
+    }
+
+    /// The current season, if one is set, and whether its pack is open right now.
+    pub fn get_season(&self) -> Option<SeasonView> {
+        Self::season_of().map(|s| SeasonView { open: s.is_open(now()), now: now(), name: s.name, start: s.start, end: s.end })
     }
 
     /// Open duel state, move log included. None for matches that were not accepted as duels.
@@ -851,6 +969,55 @@ impl Game {
         let mut map = Self::collections();
         map.insert(who.clone(), c.clone());
         map.flush();
+    }
+
+    /// Draw a trial pack for `who` and add it to their collection.
+    fn open_trial_pack(&mut self, who: &AccountId) -> collection::Pack {
+        let mut col = self.collection_of(who);
+        let mut input = Vec::with_capacity(72);
+        input.extend_from_slice(who.as_bytes());
+        input.extend_from_slice(&col.opened.to_be_bytes());
+        input.extend_from_slice(&env::random_seed());
+        let pack = collection::open(env::keccak256_array(&input));
+        col.add(&pack);
+        self.collection_put(who, &col);
+        env::log_str(&format!("PackOpened {} {:?} {}", who, pack.pictures, pack.creature));
+        pack
+    }
+
+    /// The physical-card stock lives under prefix "x" (key 0), minted tokens under prefix "y" (token id).
+    fn rwa_stock_of() -> rwa::Stock {
+        LookupMap::<u8, rwa::Stock>::new(b"x").get(&0).cloned().unwrap_or_default()
+    }
+
+    fn rwa_stock_put(s: &rwa::Stock) {
+        let mut map = LookupMap::<u8, rwa::Stock>::new(b"x");
+        map.insert(0, s.clone());
+        map.flush();
+    }
+
+    fn rwa_tokens() -> LookupMap<u8, rwa::Token> {
+        LookupMap::new(b"y")
+    }
+
+    fn rwa_view(s: &rwa::Stock, id: u8) -> RwaTokenView {
+        let t = Self::rwa_tokens().get(&id).cloned();
+        RwaTokenView {
+            id,
+            card: s.cards[id as usize].clone(),
+            owner: t.as_ref().map(|t| t.owner.clone()),
+            minted_at: t.as_ref().map(|t| t.minted_at),
+            redeemed: t.map_or(false, |t| t.redeemed),
+        }
+    }
+
+    /// The season lives in its own map under prefix "s" (key 0), so adding it needed no state migration.
+    fn seasons() -> LookupMap<u8, collection::Season> {
+        LookupMap::new(b"s")
+    }
+
+    fn season_of() -> Option<collection::Season> {
+        Self::seasons().get(&0).cloned()
     }
 
     /// Custom deck cards (with perks) live in their own map under prefix "e", for the same no-migration reason as duels.

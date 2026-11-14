@@ -17,6 +17,13 @@ fn ctx(predecessor: &str, height: u64, secs: u64) -> VMContextBuilder {
 
 const T0: u64 = 1_800_000_000;
 
+/// A call with exactly 1 yoctoNEAR attached, as NEP-171 transfers require.
+fn ctx1(predecessor: &str, height: u64, secs: u64) -> VMContextBuilder {
+    let mut b = ctx(predecessor, height, secs);
+    b.attached_deposit(NearToken::from_yoctonear(1));
+    b
+}
+
 fn game() -> Game {
     testing_env!(ctx("owner.near", 100, T0).build());
     let mut g = Game::new(acc("owner.near"), acc("keeper.near"), acc("tusd.near"), acc("tnear.near"), [500, 800, 1500], U128(4_000_000));
@@ -487,35 +494,40 @@ fn buy_pack(g: &mut Game, who: &str, amount: u128, secs: u64) -> u128 {
 }
 
 #[test]
-fn buying_a_pack_unlocks_cards_and_the_price_goes_to_the_prize_pool() {
+fn trial_packs_are_free_for_every_account_and_unlock_cards() {
     let mut g = game();
-    assert_eq!(g.pack_price().0, collection::PACK_PRICE);
-    assert_eq!(g.get_collection(acc("alice.near")).opened, 0);
+    assert_eq!(g.pack_price().0, 0);
+    assert_eq!(g.season_pack_price().0, collection::PACK_PRICE);
     let pool = g.prize_pool().0;
-    let refund = buy_pack(&mut g, "alice.near", 5_000_000, T0 + 5);
-    assert_eq!(refund, 5_000_000 - collection::PACK_PRICE); // the extra comes back
-    assert_eq!(g.prize_pool().0, pool + collection::PACK_PRICE);
+    // any account opens one with no payment, only the call
+    testing_env!(ctx("alice.near", 101, T0 + 5).build());
+    let pack = g.open_pack();
     let c = g.get_collection(acc("alice.near"));
-    let last = c.last_pack.clone().unwrap();
     assert_eq!(c.opened, 1);
-    assert!(c.creatures.contains(&last.creature));
-    assert!(last.pictures.iter().all(|p| c.pictures.contains(p)));
-    // a second pack differs (the counter is part of the seed) and the totals only grow
-    buy_pack(&mut g, "alice.near", collection::PACK_PRICE, T0 + 5);
+    assert_eq!(c.last_pack.clone().unwrap(), pack);
+    assert!(c.creatures.contains(&pack.creature));
+    assert!(pack.pictures.iter().all(|p| c.pictures.contains(p)));
+    assert_eq!(g.prize_pool().0, pool, "nothing is paid, so the prize pool does not change");
+    // a second one differs (the counter is part of the seed) and the totals only grow
+    let again = g.open_pack();
+    assert_ne!(again, pack);
     let d = g.get_collection(acc("alice.near"));
     assert_eq!(d.opened, 2);
     assert!(d.pictures.len() >= c.pictures.len() && d.creatures.len() >= c.creatures.len());
-    // someone else is unaffected
+    // someone else is unaffected, and can open their own
     assert_eq!(g.get_collection(acc("bob.near")).opened, 0);
+    testing_env!(ctx("bob.near", 102, T0 + 6).build());
+    g.open_pack();
+    assert_eq!(g.get_collection(acc("bob.near")).opened, 1);
 }
 
 #[test]
-fn a_pack_needs_the_full_price_and_tusd() {
+fn an_old_style_paid_trial_pack_still_opens_but_returns_all_the_tusd() {
     let mut g = game();
-    assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| buy_pack(&mut g, "alice.near", collection::PACK_PRICE - 1, T0))).is_err());
-    testing_env!(ctx("tnear.near", 100, T0).build());
-    assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| g.ft_on_transfer(acc("alice.near"), U128(100 * NEAR_UNIT), r#"{"action":"pack"}"#.into()))).is_err());
-    assert_eq!(g.get_collection(acc("alice.near")).opened, 0);
+    let pool = g.prize_pool().0;
+    assert_eq!(buy_pack(&mut g, "alice.near", 2_000_000, T0 + 5), 2_000_000);
+    assert_eq!(g.get_collection(acc("alice.near")).opened, 1);
+    assert_eq!(g.prize_pool().0, pool);
 }
 
 #[test]
@@ -582,4 +594,166 @@ fn a_duel_stored_before_perks_existed_still_loads_and_can_be_played_on() {
     g.play(U64(id), 0, 0);
     assert_eq!(g.get_duel(U64(id)).unwrap().log.len(), 1);
     assert!(Game::duels().get(&id).is_some());
+}
+
+// ------------------------------------------------------------------ season pack
+
+fn buy_season(g: &mut Game, who: &str, amount: u128, secs: u64) -> u128 {
+    testing_env!(ctx("tusd.near", 130, secs).build());
+    match g.ft_on_transfer(acc(who), U128(amount), r#"{"action":"season_pack"}"#.into()) {
+        PromiseOrValue::Value(v) => v.0,
+        _ => panic!("expected a value"),
+    }
+}
+
+#[test]
+fn the_season_pack_sells_only_inside_its_window_and_drops_season_pictures() {
+    let mut g = game();
+    let start = T0 + 100;
+    let end = start + 60 * 24 * 3600;
+    // no season yet: refused
+    assert!(g.get_season().is_none());
+    assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| buy_season(&mut g, "alice.near", 2_000_000, T0 + 1))).is_err());
+    // only the owner sets it, and it must end after it starts
+    testing_env!(ctx("alice.near", 120, T0).build());
+    assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| g.set_season("White Flame".into(), U64(start), U64(end)))).is_err());
+    testing_env!(ctx("owner.near", 120, T0).build());
+    assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| g.set_season("White Flame".into(), U64(end), U64(start)))).is_err());
+    g.set_season("White Flame".into(), U64(start), U64(end));
+    // no physical cards loaded yet: sold out
+    assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| buy_season(&mut g, "alice.near", 2_000_000, start))).is_err());
+    testing_env!(ctx("owner.near", 120, T0).build());
+    g.set_rwa_stock(vec!["SV11W 011 Tepig".into(), "SV11W 058 Zorua".into(), "SV11W 040 Gothitelle".into()]);
+    let s = g.get_season().unwrap();
+    assert_eq!((s.name.as_str(), s.start, s.end, s.open), ("White Flame", start, end, false));
+    // before it opens: refused
+    assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| buy_season(&mut g, "alice.near", 2_000_000, start - 1))).is_err());
+    // inside the window: one physical-card token and nothing else, extra tUSD returned, price to the prize pool
+    let pool = g.prize_pool;
+    assert_eq!(buy_season(&mut g, "alice.near", 3_000_000, start), 1_000_000);
+    assert_eq!(g.prize_pool, pool + collection::PACK_PRICE);
+    assert_eq!(g.rwa_tokens_of(acc("alice.near")).len(), 1);
+    let c = g.get_collection(acc("alice.near"));
+    assert!(c.pictures.is_empty() && c.creatures.is_empty() && c.opened == 0, "no pictures or creature from a season pack");
+    // after it closes: refused, and the view says closed
+    assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| buy_season(&mut g, "alice.near", 2_000_000, end))).is_err());
+    testing_env!(ctx("alice.near", 140, end).build());
+    assert!(!g.get_season().unwrap().open);
+}
+
+#[test]
+fn season_packs_mint_each_physical_card_once_then_sell_out_and_tokens_transfer_and_redeem() {
+    let mut g = game();
+    testing_env!(ctx("owner.near", 120, T0).build());
+    g.set_season("White Flare".into(), U64(T0), U64(T0 + 60 * 86400));
+    // only the owner loads the stock
+    testing_env!(ctx("alice.near", 120, T0).build());
+    assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| g.set_rwa_stock(vec!["x".into()]))).is_err());
+    testing_env!(ctx("owner.near", 120, T0).build());
+    g.set_rwa_stock(vec!["SV11W 011 Tepig".into(), "SV11W 058 Zorua".into()]);
+    assert_eq!((g.rwa_stock().total, g.rwa_stock().remaining), (2, 2));
+    // each pack mints one token to the buyer; the two packs get different cards
+    buy_season(&mut g, "alice.near", 2_000_000, T0 + 1);
+    buy_season(&mut g, "bob.near", 2_000_000, T0 + 2);
+    assert_eq!(g.rwa_stock().remaining, 0);
+    let a = g.rwa_tokens_of(acc("alice.near"));
+    let b = g.rwa_tokens_of(acc("bob.near"));
+    assert_eq!((a.len(), b.len()), (1, 1));
+    assert_ne!(a[0].id, b[0].id);
+    assert_eq!(a[0].minted_at, Some(T0 + 1));
+    // sold out: the next pack is refused (and the stock can no longer be replaced)
+    assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| buy_season(&mut g, "carol.near", 2_000_000, T0 + 3))).is_err());
+    testing_env!(ctx("owner.near", 120, T0 + 3).build());
+    assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| g.set_rwa_stock(vec!["x".into()]))).is_err());
+    // only the holder transfers
+    let id = a[0].id;
+    testing_env!(ctx("bob.near", 121, T0 + 4).build());
+    testing_env!(ctx1("bob.near", 121, T0 + 4).build());
+    assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| g.nft_transfer(acc("bob.near"), id.to_string(), None, None))).is_err());
+    testing_env!(ctx1("alice.near", 121, T0 + 4).build());
+    g.nft_transfer(acc("carol.near"), id.to_string(), None, None);
+    assert!(g.rwa_tokens_of(acc("alice.near")).is_empty());
+    assert_eq!(g.rwa_tokens_of(acc("carol.near"))[0].id, id);
+    // redeeming burns it for good: it cannot be redeemed again or moved
+    testing_env!(ctx("carol.near", 122, T0 + 5).build());
+    g.rwa_redeem(id);
+    assert!(g.rwa_tokens_of(acc("carol.near"))[0].redeemed);
+    assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| g.rwa_redeem(id))).is_err());
+    testing_env!(ctx1("carol.near", 122, T0 + 5).build());
+    assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| g.nft_transfer(acc("dave.near"), id.to_string(), None, None))).is_err());
+    // tokens are collectibles only: they never become deck pictures (season pictures and token ids are separate)
+    assert_eq!(g.rwa_all().len(), 2);
+}
+
+#[test]
+fn physical_cards_are_nep171_nfts_with_metadata_enumeration_approvals_and_events() {
+    use near_sdk::test_utils::get_logs;
+    let mut g = game();
+    testing_env!(ctx("owner.near", 120, T0).build());
+    g.set_season("White Flare".into(), U64(T0), U64(T0 + 60 * 86400));
+    g.set_rwa_stock(vec!["SV11W 004 Cottonee".into(), "SV11W 011 Tepig".into(), "SV11W 058 Zorua".into()]);
+    g.set_nft_config(Some("https://cards.example".into()), vec!["/a.jpeg".into(), "/b.jpeg".into(), "/c.jpeg".into()], None);
+    let m = g.nft_metadata();
+    assert_eq!((m.spec.as_str(), m.symbol.as_str(), m.base_uri.as_deref()), ("nft-1.0.0", "CDGWF", Some("https://cards.example")));
+    assert_eq!(g.nft_total_supply().0, 0);
+
+    // a season pack mints an NFT and logs a NEP-297 nft_mint event
+    buy_season(&mut g, "alice.near", 2_000_000, T0 + 1);
+    assert!(get_logs().iter().any(|l| l.starts_with("EVENT_JSON:") && l.contains("\"nep171\"") && l.contains("\"nft_mint\"") && l.contains("alice.near")));
+    let id = g.nft_tokens_for_owner(acc("alice.near"), None, None)[0].token_id.clone();
+    let t = g.nft_token(id.clone()).unwrap();
+    assert_eq!(t.owner_id, acc("alice.near"));
+    assert_eq!(t.metadata.copies, Some(1));
+    assert!(t.metadata.title.unwrap().contains(" · SV11W "));
+    assert!(t.metadata.media.unwrap().ends_with(".jpeg"));
+    assert!(t.metadata.extra.unwrap().contains("\"physical\":true"));
+    assert_eq!((g.nft_total_supply().0, g.nft_supply_for_owner(acc("alice.near")).0, g.nft_tokens(None, None).len()), (1, 1, 1));
+    assert!(g.nft_token("2".repeat(1) + "9").is_none() && g.nft_token("x".into()).is_none());
+
+    // transfers need exactly 1 yoctoNEAR
+    testing_env!(ctx("alice.near", 121, T0 + 2).build());
+    assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| g.nft_transfer(acc("bob.near"), id.clone(), None, None))).is_err());
+
+    // approvals: alice approves a market, which then moves the token; approvals are cleared after the move
+    let mut c = ctx("alice.near", 121, T0 + 2);
+    c.attached_deposit(NearToken::from_millinear(10));
+    testing_env!(c.build());
+    assert!(g.nft_approve(id.clone(), acc("market.near"), None).is_none());
+    assert!(g.nft_is_approved(id.clone(), acc("market.near"), Some(0)));
+    assert!(!g.nft_is_approved(id.clone(), acc("market.near"), Some(1)));
+    testing_env!(ctx1("market.near", 122, T0 + 3).build());
+    assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| g.nft_transfer(acc("bob.near"), id.clone(), Some(7), None))).is_err());
+    g.nft_transfer(acc("bob.near"), id.clone(), Some(0), Some("sold".into()));
+    assert!(get_logs().iter().any(|l| l.contains("\"nft_transfer\"") && l.contains("\"authorized_id\":\"market.near\"") && l.contains("\"memo\":\"sold\"")));
+    assert_eq!(g.nft_token(id.clone()).unwrap().owner_id, acc("bob.near"));
+    assert!(!g.nft_is_approved(id.clone(), acc("market.near"), None));
+    // the market can no longer move it, and only the holder revokes
+    assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| g.nft_transfer(acc("carol.near"), id.clone(), None, None))).is_err());
+    let mut c = ctx("bob.near", 123, T0 + 4);
+    c.attached_deposit(NearToken::from_millinear(10));
+    testing_env!(c.build());
+    g.nft_approve(id.clone(), acc("market.near"), None);
+    assert!(g.nft_is_approved(id.clone(), acc("market.near"), Some(1)), "approval ids are never reused");
+    testing_env!(ctx1("bob.near", 123, T0 + 4).build());
+    g.nft_revoke_all(id.clone());
+    assert!(!g.nft_is_approved(id.clone(), acc("market.near"), None));
+
+    // nft_resolve_transfer: a receiver that asks for the token back gets it returned
+    let mut c = ctx("game.near", 124, T0 + 5);
+    c.current_account_id(acc("game.near")).predecessor_account_id(acc("game.near"));
+    testing_env!(c.build(), near_sdk::test_vm_config(), near_sdk::RuntimeFeesConfig::test(), Default::default(), vec![near_sdk::PromiseResult::Successful(b"true".to_vec())]);
+    let mut tokens = Game::rwa_tokens();
+    let mut tk = tokens.get(&id.parse::<u8>().unwrap()).cloned().unwrap();
+    tk.owner = acc("receiver.near");
+    tokens.insert(id.parse::<u8>().unwrap(), tk);
+    tokens.flush();
+    assert!(!g.nft_resolve_transfer(acc("bob.near"), acc("receiver.near"), id.clone(), None, Ok(true)));
+    assert_eq!(g.nft_token(id.clone()).unwrap().owner_id, acc("bob.near"));
+
+    // redeeming burns it: gone from every NFT view, with an nft_burn event
+    testing_env!(ctx("bob.near", 125, T0 + 6).build());
+    g.rwa_redeem(id.parse::<u8>().unwrap());
+    assert!(get_logs().iter().any(|l| l.contains("\"nft_burn\"")));
+    assert!(g.nft_token(id.clone()).is_none());
+    assert_eq!((g.nft_total_supply().0, g.nft_supply_for_owner(acc("bob.near")).0), (0, 0));
 }

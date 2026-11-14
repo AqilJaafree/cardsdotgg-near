@@ -5,6 +5,9 @@ import { GameScreen, ARCADE_TABS } from "./GameScreen";
 import { SEASON } from "@/lib/game/catalog";
 import { useTickets } from "@/lib/game/arcade";
 import { useRwaStock } from "@/lib/game/rwa";
+import { useState } from "react";
+import { BuySheet, GradedTile, useGradedCards } from "./GradedCards";
+import type { SolListing } from "@/lib/solana/listings";
 
 type Item = {
   key: string; name: string; blurb: string; cost: string; art: React.ReactNode;
@@ -16,6 +19,9 @@ type Item = {
 export default function Market() {
   const { t, season } = useTickets();
   const stock = useRwaStock().data;
+  // Graded cards sit in the same grid as the packs, after the packs and before the coming-soon items.
+  const graded = useGradedCards();
+  const [buying, setBuying] = useState<SolListing | null>(null);
   const items: Item[] = [
     {
       key: "trial", name: "Trial pack", cost: "1 Pack Ticket", blurb: "5 trial pictures and 1 creature for your decks.",
@@ -37,9 +43,9 @@ export default function Market() {
       <span><Ticket size={16} /><b>{t?.pack ?? 0}</b> Pack</span>
       <span className="season"><Sparkles size={16} /><b>{season}</b> Season</span>
     </div>
-    <div className="mk-grid">{items.map((it) => {
+    <div className="mk-grid">{items.flatMap((it, i) => {
       const ready = !!it.live && it.live.have > 0;
-      return <section key={it.key} className={`qm-card gs-card mk-item ${it.live ? "" : "soon"}`}>
+      const tile = <section key={it.key} className={`qm-card gs-card mk-item ${it.live ? "" : "soon"}`}>
         {!it.live && <span className="arc-tag soon"><Lock size={11} />COMING SOON</span>}
         <div className="mk-art">{it.art}</div>
         <h2>{it.name}</h2>
@@ -50,6 +56,13 @@ export default function Market() {
           : <Link className="cm-btn cm-collection qm-btn mk-btn" href={it.live.earnHref}>{it.live.earn}</Link>)
           : <button className="cm-btn cm-collection qm-btn mk-btn" disabled>SOON</button>}
       </section>;
+      const lastLive = !!it.live && !items[i + 1]?.live;
+      if (!lastLive) return [tile];
+      const cards = graded.cards === null
+        ? [<section key="graded-loading" className="qm-card gs-card mk-item mk-graded"><span className="arc-tag graded">GRADED CARD</span><div className="mk-art" /><h2>Loading cards…</h2></section>]
+        : graded.cards.map((l) => <GradedTile key={l.mint} l={l} usd={graded.usd} onBuy={() => setBuying(l)} />);
+      return [tile, ...cards];
     })}</div>
+    {buying && <BuySheet listing={buying} usd={graded.usd} onClose={() => setBuying(null)} />}
   </GameScreen>;
 }

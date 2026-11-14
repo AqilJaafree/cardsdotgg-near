@@ -861,3 +861,81 @@ body:has(.game-menu) .modal-backdrop{z-index:260}
 .pack-actions .pack-note{margin:0;max-width:320px;padding:8px 14px;border:3px solid #3b1d0e;border-radius:12px;background:#fdf3da;color:#5a2e12;font:600 14px/1.4 Inter,system-ui,sans-serif;text-align:center;text-shadow:none}
 .pack-actions .pack-note.bad{background:#ffe1d6;color:#8a2a12}
 .pack-actions .primary-button:disabled{opacity:1;filter:grayscale(1) brightness(1.05);cursor:not-allowed}.pack-actions .primary-button:disabled,.pack-actions .primary-button:disabled *{color:#fff!important;text-shadow:0 2px 0 #3b1d0e!important}
+
+/* ── Market: real cards on Solana (NEAR Intents) ── */
+.sm-wrap{width:100%;max-width:1020px;display:flex;flex-direction:column;gap:16px;margin-top:6px}
+.sm-head{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center}
+.sm-head h2{margin:0;font:400 32px "Lilita One",system-ui,sans-serif;color:#ffd24a;text-shadow:0 3px 0 #3b1d0e}
+.sm-head p{margin:0;font:500 15px Inter,system-ui,sans-serif;color:#f3eaff}
+.sm-row h3{margin:0 0 10px;font:400 22px "Lilita One",system-ui,sans-serif;color:#fff6e6;text-shadow:0 2px 0 #3b1d0e}
+.sm-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
+@media (max-width:900px){.sm-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:560px){.sm-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.sm-card{display:flex;flex-direction:column;gap:5px;padding:10px;border:3px solid #3b1d0e;border-radius:16px;background:linear-gradient(180deg,#fdf3da,#f2ddb2);box-shadow:0 4px 0 #3b1d0e;color:#3b1d0e;min-width:0}
+.sm-img{display:block;border-radius:10px;overflow:hidden;background:#1d1446;aspect-ratio:3/4}
+.sm-img img{width:100%;height:100%;object-fit:contain;transition:transform .2s}
+.sm-card:hover .sm-img img{transform:scale(1.04)}
+.sm-card b{font:400 14px/1.2 "Lilita One",system-ui,sans-serif;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:34px}
+.sm-grade{font:700 12px Inter,system-ui,sans-serif;color:#7a5a12}
+.sm-price{font:400 18px "Lilita One",system-ui,sans-serif;color:#3b1d0e}
+.sm-price small{font:600 12px Inter,system-ui,sans-serif;color:#6b4423}
+.sm-buy{height:42px!important;font-size:14px!important;display:inline-flex!important;align-items:center;justify-content:center;gap:6px;width:100%!important;padding:0 6px!important}
+.sm-loading{margin:0;font:600 14px Inter,system-ui,sans-serif;color:#e9dcff}
+.sm-foot{margin:0;text-align:center;font:500 12px Inter,system-ui,sans-serif;color:#d9c8f0}
+.sm-sheet{max-width:440px!important;align-items:stretch!important;text-align:left!important;gap:12px!important}
+.sm-sheet-top{display:flex;gap:12px;align-items:center}
+.sm-sheet-top img{width:84px;border-radius:8px;border:3px solid #3b1d0e;background:#1d1446}
+.sm-sheet-top div{display:flex;flex-direction:column;gap:3px;min-width:0}
+.sm-sheet-top b{font:400 17px/1.2 "Lilita One",system-ui,sans-serif}
+.sm-steps{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:6px;font:500 14px/1.4 Inter,system-ui,sans-serif;color:#5a2e12}
+.sm-steps li::marker{font-family:"Lilita One",system-ui,sans-serif;color:#f29a1d}
+.sm-field{display:flex;flex-direction:column;gap:6px;font:400 15px "Lilita One",system-ui,sans-serif;color:#3b1d0e}
+.sm-field input{height:46px;border:3px solid #3b1d0e;border-radius:12px;padding:0 12px;background:#fffaf0;color:#3b1d0e;font:600 14px ui-monospace,Menlo,monospace}
+.sm-acct{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:0;font:500 13px Inter,system-ui,sans-serif;color:#6b4423}
+.sm-acct b{color:#3b1d0e;word-break:break-all}
+.sm-link{border:0;background:none;padding:0;font:700 13px Inter,system-ui,sans-serif;color:#1f6fb5;cursor:pointer}
+.sm-quote{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.sm-quote div{display:flex;flex-direction:column;gap:2px;padding:10px;border:3px solid #3b1d0e;border-radius:12px;background:#fffaf0}
+.sm-quote small{font:600 12px Inter,system-ui,sans-serif;color:#6b4423}
+.sm-quote b{font:400 22px "Lilita One",system-ui,sans-serif;color:#3b1d0e}
+.sm-sheet .pack-note{margin:0;padding:8px 12px;border:3px solid #3b1d0e;border-radius:12px;background:#fdf3da;color:#5a2e12;font:600 13px/1.4 Inter,system-ui,sans-serif}
+.sm-sheet .pack-note.bad{background:#ffe1d6;color:#8a2a12}
+.sm-go{display:inline-flex!important;align-items:center;justify-content:center;gap:8px;text-decoration:none}
+.sm-actions{display:flex;justify-content:space-between;gap:8px}
+.sm-actions .arc-rules-btn{text-decoration:none}
+.sm-spin{animation:smspin 1s linear infinite}@keyframes smspin{to{transform:rotate(360deg)}}
+.sm-price small{display:block}
+.sm-buy{white-space:nowrap}
+.sm-sheet .qm-btn{font-size:19px!important;height:56px!important;white-space:nowrap}
+@media (max-width:560px){.sm-buy{font-size:12px!important;height:38px!important;gap:4px}.sm-buy svg{width:13px;height:13px}.sm-card{padding:8px}.sm-price{font-size:16px}}
+/* graded cards in the market grid */
+.arc-tag.graded{background:linear-gradient(#ffe27a,#c9971b)}
+.mk-graded .mk-art{background:radial-gradient(circle at 50% 40%,#3a2f86,#1d1446);padding:8px}
+.mk-graded .mk-art img{height:154px;width:auto;transform:none;border-radius:4px;object-fit:contain}
+.mk-graded h2{font-size:20px!important;line-height:1.15;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:46px}
+.mk-graded p{font-size:13px!important}
+
+/* ── Wallet sheet: game style (was the old site style) ── */
+.wd{width:min(92vw,420px)!important;max-width:420px!important;padding:30px 22px 22px!important;border:4px solid #3b1d0e!important;border-radius:22px!important;background:linear-gradient(180deg,#fdf3da,#f2ddb2)!important;box-shadow:0 7px 0 #3b1d0e,0 20px 40px #0008!important;display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center}
+.wd h2{margin:0!important;font:400 32px "Lilita One",system-ui,sans-serif!important;color:#3b1d0e}
+.wd>p{margin:0!important;font:500 14px/1.5 Inter,system-ui,sans-serif!important;color:#6b4423!important}
+.wd-close{position:absolute;top:12px;right:12px;width:40px;height:40px;display:grid;place-items:center;border:3px solid #3b1d0e!important;border-radius:50%;background:linear-gradient(180deg,#fff 0 50%,#f2ddb2 50% 100%);box-shadow:0 3px 0 #3b1d0e;color:#5a2e12;cursor:pointer}
+.wd-close:active{transform:translateY(2px);box-shadow:0 1px 0 #3b1d0e}
+.wd-icon{width:58px;height:58px;display:grid;place-items:center;border:3px solid #3b1d0e;border-radius:16px;background:linear-gradient(#ffe27a,#f29a1d);color:#fff;box-shadow:0 4px 0 #3b1d0e;filter:drop-shadow(0 1px 0 #3b1d0e)}
+.wd-acct{width:100%;display:flex;align-items:center;gap:8px;padding:8px 8px 8px 10px;border:3px solid #3b1d0e;border-radius:14px;background:#fffaf0}
+.wd-net{flex:none;padding:3px 8px;border-radius:999px;background:#3b1d0e;color:#ffd24a;font:400 11px/1 "Lilita One",system-ui,sans-serif;letter-spacing:.06em}
+.wd-acct code{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:none!important;padding:0!important;font:700 14px ui-monospace,Menlo,monospace!important;color:#3b1d0e;text-align:left}
+.wd-copy{flex:none;display:inline-flex;align-items:center;gap:4px;padding:6px 10px;border:2px solid #3b1d0e!important;border-radius:10px;background:linear-gradient(180deg,#fff 0 50%,#f2ddb2 50% 100%);box-shadow:0 2px 0 #3b1d0e;color:#5a2e12;font:400 13px "Lilita One",system-ui,sans-serif;cursor:pointer}
+.wd-copy:active{transform:translateY(2px);box-shadow:none}
+.wd-bal{width:100%;display:flex;align-items:baseline;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:10px 14px;border:3px solid #3b1d0e;border-radius:14px;background:#3b1d0e;color:#ffd24a}
+.wd-bal small{font:400 14px "Lilita One",system-ui,sans-serif;color:#e9d2a4}
+.wd-bal b{font:400 26px "Lilita One",system-ui,sans-serif;color:#ffd24a}
+.wd-bal b i{font-style:normal;font-size:15px;color:#e9d2a4}
+.wd-low{width:100%;text-align:left;font:600 12px Inter,system-ui,sans-serif;color:#ffb38a}
+.wd-btn{width:100%!important;height:56px!important;display:inline-flex!important;align-items:center;justify-content:center;gap:8px;font-size:21px!important;text-decoration:none!important}
+.wd-hint{margin-top:-4px;font:500 12px/1.4 Inter,system-ui,sans-serif;color:#6b4423}
+/* the generic ".confirmation button" gold style must not repaint the wallet sheet's own buttons */
+.confirmation.wd button.wd-close,.confirmation.wd button.wd-copy{background:linear-gradient(180deg,#fff 0 50%,#f2ddb2 50% 100%)!important;color:#5a2e12!important;text-shadow:none!important;padding:0!important;letter-spacing:0!important}
+.confirmation.wd button.wd-copy{padding:6px 10px!important;border-width:2px!important;border-radius:10px!important}
+.confirmation.wd button.wd-close{border-radius:50%!important}
+.confirmation.wd button.cm-collection{background:linear-gradient(180deg,#f6e2b6 0 50%,#ddbf86 50% 100%)!important;color:#5a2e12!important;text-shadow:0 2px 0 #fff6!important}

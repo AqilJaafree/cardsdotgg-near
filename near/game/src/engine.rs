@@ -1,5 +1,6 @@
-//! Pure, deterministic auto-battle. A line-for-line port of contracts/src/engine/BattleEngine.sol, so the same
-//! (seed, tierA, tierB) gives the same result on both. Rules: cardsdotgg.md "Battle engine" plus shared/engine-rules.md.
+//! Pure, deterministic auto-battle: the same
+//! (seed, tierA, tierB) always gives the same result, checked against the reference vectors in vectors.txt.
+//! Rules: shared/engine-rules.md.
 use crate::card_data;
 use near_sdk::serde::Serialize;
 use sha3::{Digest, Keccak256};
@@ -31,7 +32,7 @@ const COMET: u8 = 21;
 const MANTIS: u8 = 22;
 const HYDRA: u8 = 23;
 
-/// kind: 0 attack, 1 heal, 2 end-of-round swap, 3 faint refill. Field meanings match shared/interfaces/Types.sol.
+/// kind: 0 attack, 1 heal, 2 end-of-round swap, 3 faint refill.
 #[derive(Clone, Copy, Default, Serialize, Debug, PartialEq, Eq)]
 #[serde(crate = "near_sdk::serde")]
 pub struct Action {
@@ -164,7 +165,7 @@ fn init(s: &mut Side, tier: u8) {
     }
 }
 
-/// keccak256(abi.encode(seed, ctr)) % n, with ctr as a 32-byte big-endian word, exactly as the Solidity engine rolls.
+/// keccak256(abi.encode(seed, ctr)) % n, with ctr as a 32-byte big-endian word, exactly as the reference engine rolls.
 fn roll(c: &mut Ctx, n: u64) -> u64 {
     let mut buf = [0u8; 64];
     buf[..32].copy_from_slice(&c.seed);
@@ -680,9 +681,9 @@ mod tests {
         }
     }
 
-    /// Vectors printed by the Solidity engine (forge script script/Vectors.s.sol); the Rust port must agree exactly.
+    /// Reference vectors (vectors.txt): the engine must reproduce every one exactly.
     #[test]
-    fn matches_solidity_engine() {
+    fn matches_reference_vectors() {
         let text = include_str!("../vectors.txt");
         let mut n = 0;
         for line in text.lines().filter(|l| !l.trim().is_empty()) {

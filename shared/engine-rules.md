@@ -1,6 +1,6 @@
 # Cardsdotgg engine rulings
 
-The authoritative battle rules are `cardsdotgg.md`, section "Battle engine". These rulings fill its gaps.
+These are the battle engine rulings; card stats and abilities are in `cards.json`.
 
 - **E1** End of round runs heals, then stat growth, then swaps, then debuff timers. Within each step: side A then side B, slots 1 to 3.
 - **E2** Start-of-round abilities run side A then side B, slots 1 to 3, then the tie roll.

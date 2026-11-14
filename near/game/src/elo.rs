@@ -1,5 +1,4 @@
 //! Fixed-point Elo, K = 32, floor 0. 10^(d/400) comes from a 25-point lookup with linear interpolation.
-//! Port of contracts/src/libs/Elo.sol.
 const ONE: i128 = 1_000_000;
 const K: i128 = 32;
 const T: [i128; 33] = [

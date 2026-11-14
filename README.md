@@ -10,9 +10,9 @@
 [![Rust](https://img.shields.io/badge/contracts-Rust-b7410e?logo=rust&logoColor=white)](near)
 [![Next.js](https://img.shields.io/badge/app-Next.js%2014-black?logo=nextdotjs)](app)
 [![Yield data](https://img.shields.io/badge/yield%20data-Rhea%20pools-6c47ff)](#where-rhea-data-is-used)
-[![Status](https://img.shields.io/badge/status-prototype-orange)](#known-limits)
+[![Status](https://img.shields.io/badge/status-prototype-orange)](#overview)
 
-[App tour](#app-tour) · [How it works](#how-it-works) · [Game rules](#game-rules) · [Architecture](#architecture) · [Quick start](#quick-start) · [Deploy](#deploy-the-app-to-netlify) · [Known limits](#known-limits)
+[App tour](#app-tour) · [How it works](#how-it-works) · [Game rules](#game-rules) · [Architecture](#architecture) · [Quick start](#quick-start)
 
 </div>
 
@@ -28,11 +28,9 @@
 - [Live contracts](#live-contracts-near-testnet)
 - [Quick start](#quick-start)
 - [Deploy to NEAR testnet](#deploy-to-near-testnet)
-- [Deploy the app to Netlify](#deploy-the-app-to-netlify)
 - [Where Rhea data is used](#where-rhea-data-is-used)
 - [Project layout](#project-layout)
 - [Testing](#testing)
-- [Known limits](#known-limits)
 - [Credits](#credits)
 
 ## Overview
@@ -40,7 +38,7 @@
 cardsdotgg is a trading-card battler where your deck is a DeFi position. You put test tokens into a vault and get a deck. The deck earns yield at rates taken from real [Rhea](https://rhea.finance) pools, and that yield, never your principal, is what you stake in matches. Two players then duel turn by turn, and each move, the winner, the stakes and the ratings are settled by a NEAR smart contract.
 
 - **A deck is a vault position.** Pick Guardian (steady), Balanced or Degen (risky). Principal never moves in a match.
-- **24 original creatures with real abilities.** Stats and abilities come from the product spec in [`cardsdotgg.md`](cardsdotgg.md).
+- **24 original creatures with real abilities.** Stats and abilities live in [`shared/cards.json`](shared/cards.json), with the rulings in [`shared/engine-rules.md`](shared/engine-rules.md).
 - **Collect and customize.** Packs unlock more creatures and pictures. Rare pictures give a small HP perk. Ownership is checked by the contract.
 - **Win packs in the arcade.** Stacker is free and earns Pack Tickets (3 a day). The Claw costs 2 tUSD and earns a Season Ticket. Every pack opens with a ticket.
 - **Real cards, one of one.** The White Flare season pack holds 23 real physical cards, each minted to its puller as a NEP-171 NFT on NEAR. Win the Claw and your card is 75% likely to be rare.
@@ -196,7 +194,7 @@ The app bundles where NEAR allows it: several actions to one contract share one 
 
 ## Game rules
 
-The duel rules live in [`near/game/src/duel.rs`](near/game/src/duel.rs) and are ported line for line to [`app/lib/game/duelEngine.ts`](app/lib/game/duelEngine.ts), so practice plays by the same rules. They build on the spec engine in [`cardsdotgg.md`](cardsdotgg.md) and [`shared/engine-rules.md`](shared/engine-rules.md).
+The duel rules live in [`near/game/src/duel.rs`](near/game/src/duel.rs) and are ported line for line to [`app/lib/game/duelEngine.ts`](app/lib/game/duelEngine.ts), so practice plays by the same rules. They build on the base engine rulings in [`shared/engine-rules.md`](shared/engine-rules.md).
 
 | | |
 | --- | --- |
@@ -268,7 +266,7 @@ flowchart TB
 
 | Part | What it does |
 | --- | --- |
-| **`near/game`** | One contract: rate oracle, deck vault, yield escrow, arena, Elo, onchain deck SVG, the auto-battle engine (a port of the Solidity engine), turn-based duels (`duel.rs`), packs (`collection.rs`), arcade tickets (`arcade.rs`), the White Flare stock (`rwa.rs`) and its NEP-171 NFTs (`nft.rs`). It lives on one account because NEAR calls between contracts are asynchronous and the state must change together. |
+| **`near/game`** | One contract: rate oracle, deck vault, yield escrow, arena, Elo, onchain deck SVG, the deterministic auto-battle engine (`engine.rs`), turn-based duels (`duel.rs`), packs (`collection.rs`), arcade tickets (`arcade.rs`), the White Flare stock (`rwa.rs`) and its NEP-171 NFTs (`nft.rs`). It lives on one account because NEAR calls between contracts are asynchronous and the state must change together. |
 | **`near/ft`** | A NEP-141 test token with a 24h `claim`. Deployed twice, as tUSD and tNEAR. |
 | **`near/pool`** | The tUSD/tNEAR constant-product pool. |
 | **`keeper/`** | Reads Rhea on mainnet and writes rates and the NEAR price to the game contract, resolves old-style matches, and holds the deploy and e2e scripts. |
@@ -353,25 +351,6 @@ bash deploy/install-resolver.sh                                             # ru
 
 The keeper's resolver (`pnpm resolve:watch`) only matters for the older auto-battle path (`accept` then `resolve`). Duels need no resolver: the contract settles them in the final move.
 
-## Deploy the app to Netlify
-
-The repo has an [`app/netlify.toml`](app/netlify.toml) for the Next.js app. This is a pnpm workspace, so Netlify builds it as a monorepo package. Netlify adds its Next.js runtime by itself.
-
-| Setting (Site configuration → Build & deploy) | Value |
-| --- | --- |
-| Base directory | *(empty: the repo root)* |
-| Package directory | `app` |
-| Build command | `pnpm --filter cardsdotgg-app build` (from `app/netlify.toml`; runs `scripts/sync-shared.mjs` first, which copies `shared/` into `app/lib/shared`) |
-| Publish directory | `app/.next` |
-| Node | 22 |
-| Environment variables | None. Contract addresses come from `shared/addresses.json`; the listing and NEAR Intents APIs need no keys. |
-
-1. In Netlify, **Add new site → Import an existing project**, pick this repository, and choose the `cardsdotgg-app` package when Netlify asks which site to build. For an existing site, set the two directories above by hand.
-2. Deploy. Every page is static except `/match/[id]`, which Netlify serves from its Next.js server function.
-3. After the first deploy, set the NFT image base so wallets can show the White Flare photos: `cd keeper && NFT_BASE_URI=https://<your-site>.netlify.app pnpm set-nft-config`.
-
-**Why `outputFileTracingRoot`:** `app/next.config.mjs` traces server files from the repo root. Without it, Next only traces inside `app/`, but pnpm installs `next` and `react` at the root, so Netlify's server function shipped without them and crashed with `Cannot find module 'next/dist/server/lib/start-server.js'`. Checked with `netlify build`: the function now includes them.
-
 ## Where Rhea data is used
 
 A one-shot keeper (`keeper/`) reads NEAR mainnet and writes `shared/rate-sources.json` and `shared/liquidity-source.json`. It runs on demand, so these are snapshots, not a live feed.
@@ -402,14 +381,12 @@ A one-shot keeper (`keeper/`) reads NEAR mainnet and writes `shared/rate-sources
 | `app/public/cards/wf-token` | Photos of the 23 White Flare cards and the pack cover |
 | `shared/` | Card data, engine rulings, Rhea data, addresses |
 | `docs/screenshots` | The images in this README |
-| `contracts/` | The original Solidity/Monad contracts, kept as the reference for the engine test vectors |
-| `cardsdotgg.md` | The original product and technical spec (written for Monad; the game rules still apply) |
 
 ## Testing
 
 | Suite | Command | What it covers |
 | --- | --- | --- |
-| Contract | `cd near && cargo test --workspace` | 65 tests: 90 Solidity engine vectors, duel rules, every deck matchup played to a result, custom decks, packs and ownership, perks, arcade tickets and the daily cap, the claw's 75%/25% odds, the season window and stock, NEP-171/177/178/181 NFTs, forfeit, timeout, and loading older stored data |
+| Contract | `cd near && cargo test --workspace` | 65 tests: 90 engine test vectors, duel rules, every deck matchup played to a result, custom decks, packs and ownership, perks, arcade tickets and the daily cap, the claw's 75%/25% odds, the season window and stock, NEP-171/177/178/181 NFTs, forfeit, timeout, and loading older stored data |
 | Duel engine (TS) | `cd app && pnpm test:duel` | 10 tests mirroring the contract's duel tests, plus the computer playing every matchup |
 | Practice (old) | `cd app && pnpm test:game` | 6 tests of the earlier practice simulation |
 | Types | `cd app && pnpm typecheck` | The whole app |
@@ -417,28 +394,9 @@ A one-shot keeper (`keeper/`) reads NEAR mainnet and writes `shared/rate-sources
 | Live, packs | `cd keeper && pnpm e2e:packs` | Earns a free Pack Ticket, opens a trial pack with it, checks the unlock, and that unowned cards are refused |
 | Live, season | `cd keeper && CONSUME_STOCK=1 pnpm e2e:season` | A paid claw play, its result, and a season pack minting one real card as an NFT (uses up one card from the stock) |
 
-## Known limits
-
-- **Prototype.** The contracts are unaudited testnet prototypes with no upgrade path, and the owner is also the keeper and the host of the game contract.
-- **Randomness.** Seeds come from the block's `random_seed`, and a caller can choose which block to act in. This covers match seeds, duel rolls, pack contents and which White Flare card a season pack draws. It is not safe for real value.
-- **Duel balance is untuned.** The class wheel and the Energy, power and retreat numbers are new. In a greedy-bot test Guardian lost most games, and a Guardian mirror takes about 30 turns. The spec target of each pairing winning 48 to 52% is not met.
-- **Arcade results.** The Claw's win is reported by the app, so a player calling the contract directly could always claim a win and get the 75% rare odds. Every Season Ticket still costs a 2 tUSD play. Free Pack Tickets are capped at 3 per wallet per day.
-- **Real cards.** The White Flare cards are real items held by the project. Redeeming one only marks the token on-chain; shipping, and collecting a delivery address privately, are handled off-chain. Paid random packs of real-value items can count as gambling in some places; check before a mainnet launch.
-- **Graded cards are mainnet.** Buy with NEAR spends real NEAR, the listing can sell before the buyer completes it (the funds stay in their card wallet), and Collector Crypt's API is undocumented: the cheapest five come from scanning listed cards up to 250 USDC and sorting them in the app.
-- **Replay HP is approximate.** The move log records damage dealt but not HP afterwards, so the replay rebuilds HP and can be slightly off for cards that heal or reflect damage. Who is active, the bench, points and Energy are exact.
-- **Wallets.** Sign-in goes through `@hot-labs/near-connect`. Quick play's bundled key approval was reported to fail in Meteor, where moves then ask for approval. The cause is unconfirmed.
-- **RPC rate limits.** The free FastNEAR endpoint refuses after a burst of about 8 requests from one IP, and the browser shows that 429 as a CORS error. The app polls about 16 requests a minute in the lobby and 12 in a battle. A FastNEAR API key would remove the limit.
-- **Not fully live-tested.** The real wallet approval for adding the session key, the deck builder's save, claim and replay on a real match, and the pack purchase through a wallet were checked with mocks or by script, not in a browser against a live wallet.
-- **Art and names.** `app/public/cards` and `app/lib/game/card-catalog.json` hold Pokémon TCG Base Set images and names, while the 24 spec creatures have no art of their own. A picture can show a different printed name than the card's game name. Confirm the rights before any release outside the hackathon.
-- **Deck token.** Decks are records in the game contract with an onchain SVG (`deck_svg`), not NEP-171 NFTs, so they do not show in NFT wallets. The White Flare cards are NEP-171 NFTs, but their images need `NFT_BASE_URI` set to the deployed app before wallets can show them.
-- **Demo seed.** The owner can seed escrow from the reserve, labelled "includes demo seed", because real yield takes days to cover a stake.
-- **Withdraw payouts.** `withdraw` updates state, then sends `ft_transfer` with a callback that restores the deck if the transfer fails. This is covered by a unit test, not yet seen on a live network.
-- **Leftover docs.** `docs/agents/*` and `cardsdotgg.md` still describe the Monad build.
-
 ## Credits
 
-- Game design and rules: [`cardsdotgg.md`](cardsdotgg.md).
+- Game rules and card data: [`shared/engine-rules.md`](shared/engine-rules.md) and [`shared/cards.json`](shared/cards.json).
 - Yield and price data: [Rhea](https://rhea.finance) pools on NEAR mainnet.
 - Graded card listings: [Collector Crypt](https://collectorcrypt.com) and [Magic Eden](https://magiceden.io). Cross-chain payment: [NEAR Intents](https://docs.near-intents.org).
 - Wallet connection: [`@hot-labs/near-connect`](https://github.com/hot-dao/near-selector). Contracts built on [near-sdk-rs](https://github.com/near/near-sdk-rs).
-- Started at Monad Blitz Devcon Mumbai and rebuilt for NEAR.

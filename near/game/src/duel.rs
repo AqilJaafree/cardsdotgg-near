@@ -1,4 +1,4 @@
-//! Turn-based duel on the spec's 24 creatures (cardsdotgg.md "Battle engine" + shared/engine-rules.md), played by two
+//! Turn-based duel on the spec's 24 creatures (shared/cards.json + shared/engine-rules.md), played by two
 //! players one onchain move at a time. Pure and deterministic given the seed handed to `play`, so it unit-tests natively.
 //!
 //! Turn skeleton (borrowed from the Pokémon TCG): alternate turns; one Energy attach per turn; one Retreat per turn,

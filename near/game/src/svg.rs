@@ -1,4 +1,4 @@
-//! Onchain SVG deck card: tier-coloured frame, asset icon, name and stats. Port of contracts/src/SvgRenderer.sol.
+//! Onchain SVG deck card: tier-coloured frame, asset icon, name and stats.
 use crate::card_data;
 
 pub fn tier_name(tier: u8) -> &'static str {

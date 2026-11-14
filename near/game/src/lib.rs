@@ -1,6 +1,5 @@
 //! Cardsdotgg on NEAR: one contract holding the rate oracle, deck vault, yield escrow and arena.
 //!
-//! This replaces the Monad contracts (RateOracle, DeckVault, DeckNFT, YieldEscrow, Arena, BattleEngine, WithdrawRouter).
 //! NEAR calls between contracts are asynchronous, so everything that has to change together lives here and settles in
 //! one transaction. Tokens are NEP-141: deposits arrive through `ft_on_transfer`, payouts leave through `ft_transfer`.
 //!

@@ -1,4 +1,4 @@
-// End-to-end packs on NEAR testnet with one fresh player: claim tUSD, buy a pack, check what unlocked, then check the
+// End-to-end packs on NEAR testnet with one fresh player: claim tUSD, open a free trial pack, check what unlocked, then check the
 // contract only lets a deck use what the player owns. Env: NEAR_OWNER_ID, NEAR_OWNER_KEY. Never prints keys.
 import { existsSync, readFileSync } from "node:fs";
 import { Account, KeyPair } from "near-api-js";
@@ -28,22 +28,16 @@ async function main() {
   ok(`player funded ${id.slice(0, 8)}`);
   await p.callFunction({ contractId: addr.tusd, methodName: "claim", args: {}, gas: T(30) });
 
-  const price = await view<string>(addr.game, "pack_price");
+  assert(await view<string>(addr.game, "pack_price") === "0", "trial packs are free");
   assert((await view<Col>(addr.game, "get_collection", { account_id: id })).opened === 0, "starts with no packs");
-  ok(`pack price ${Number(price) / 1e6} tUSD`);
-  // too little is refused (the whole transfer is returned)
-  await p.callFunction({ contractId: addr.tusd, methodName: "ft_transfer_call", args: { receiver_id: addr.game, amount: String(Number(price) - 1), msg: '{"action":"pack"}' }, deposit: 1n, gas: T(70) }).catch(() => {});
-  assert((await view<Col>(addr.game, "get_collection", { account_id: id })).opened === 0, "an underpaid pack opens nothing");
-  ok("underpaying did not open a pack");
-
   const before = BigInt(await view<string>(addr.tusd, "ft_balance_of", { account_id: id }));
-  await p.callFunction({ contractId: addr.tusd, methodName: "ft_transfer_call", args: { receiver_id: addr.game, amount: price, msg: '{"action":"pack"}' }, deposit: 1n, gas: T(70) });
+  await p.callFunction({ contractId: addr.game, methodName: "open_pack", args: {}, gas: T(30) });
   const after = BigInt(await view<string>(addr.tusd, "ft_balance_of", { account_id: id }));
   const col = await view<Col>(addr.game, "get_collection", { account_id: id });
   assert(col.opened === 1 && col.last_pack, "one pack opened");
-  assert(before - after === BigInt(price), `exactly the price was taken (took ${before - after})`);
+  assert(before === after, `a trial pack costs no tUSD (balance moved by ${before - after})`);
   assert(col.last_pack!.pictures.every((x) => col.pictures.includes(x)) && col.creatures.includes(col.last_pack!.creature), "the pack's cards are unlocked");
-  ok(`bought a pack: pictures ${JSON.stringify(col.last_pack!.pictures)}, creature ${col.last_pack!.creature}; took ${Number(before - after) / 1e6} tUSD`);
+  ok(`opened a free trial pack: pictures ${JSON.stringify(col.last_pack!.pictures)}, creature ${col.last_pack!.creature}; no tUSD spent`);
 
   // a deck: Guardian (tier 0). Its own creatures are free to use; others must be unlocked.
   await p.callFunction({ contractId: addr.tusd, methodName: "ft_transfer_call", args: { receiver_id: addr.game, amount: "20000000", msg: '{"action":"deposit","tier":0}' }, deposit: 1n, gas: T(100) });

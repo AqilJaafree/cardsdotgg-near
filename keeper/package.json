@@ -11,7 +11,11 @@
     "e2e:packs": "tsx src/e2e-packs.ts",
     "setup-keeper": "tsx src/setup-keeper.ts",
     "resolve": "tsx src/resolver.ts",
-    "resolve:watch": "tsx src/resolver.ts --watch"
+    "resolve:watch": "tsx src/resolver.ts --watch",
+    "set-season": "tsx src/set-season.ts",
+    "e2e:season": "tsx src/e2e-season.ts",
+    "set-rwa-stock": "tsx src/set-rwa-stock.ts",
+    "set-nft-config": "tsx src/set-nft-config.ts"
   },
   "dependencies": {
     "near-api-js": "7.5.3"

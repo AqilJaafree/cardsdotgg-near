@@ -15,7 +15,8 @@
     "set-season": "tsx src/set-season.ts",
     "e2e:season": "tsx src/e2e-season.ts",
     "set-rwa-stock": "tsx src/set-rwa-stock.ts",
-    "set-nft-config": "tsx src/set-nft-config.ts"
+    "set-nft-config": "tsx src/set-nft-config.ts",
+    "set-rwa-rare": "tsx src/set-rwa-rare.ts"
   },
   "dependencies": {
     "near-api-js": "7.5.3"

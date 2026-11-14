@@ -34,8 +34,12 @@ async function main() {
   ok(`player funded ${id.slice(0, 8)}`);
 
   const before = BigInt(await view<string>(addr.tusd, "ft_balance_of", { account_id: id }));
-  await p.callFunction({ contractId: addr.tusd, methodName: "ft_transfer_call", args: { receiver_id: addr.game, amount: "2000000", msg: '{"action":"season_pack"}' }, deposit: 1n, gas: T(70) });
+  // paid claw play (2 tUSD), report a win, then open the season pack with the Season Ticket
+  await p.callFunction({ contractId: addr.tusd, methodName: "ft_transfer_call", args: { receiver_id: addr.game, amount: "2000000", msg: '{"action":"arcade_claw"}' }, deposit: 1n, gas: T(70) });
   const after = BigInt(await view<string>(addr.tusd, "ft_balance_of", { account_id: id }));
+  await p.callFunction({ contractId: addr.game, methodName: "arcade_claw_result", args: { won: true }, gas: T(20) });
+  assert((await view<{ season_win: number }>(addr.game, "get_tickets", { account_id: id })).season_win === 1, "a won Season Ticket");
+  await p.callFunction({ contractId: addr.game, methodName: "open_season_pack", args: {}, gas: T(50) });
   const col = await view<Col>(addr.game, "get_collection", { account_id: id });
   assert(before - after === 2_000_000n, `exactly 2 tUSD was taken (took ${before - after})`);
   assert(col.opened === 0 && col.pictures.length === 0 && col.creatures.length === 0, "a season pack gives no pictures or creature");

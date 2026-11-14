@@ -5,7 +5,9 @@
     "set": "SV11W",
     "number": 4,
     "src": "/cards/wf-token/Cottonee.SV11W.4.57737.jpeg",
-    "card": "SV11W 004 Cottonee"
+    "card": "SV11W 004 Cottonee",
+    "rarity": "C",
+    "rare": false
   },
   {
     "id": 1,
@@ -13,7 +15,9 @@
     "set": "SV11W",
     "number": 7,
     "src": "/cards/wf-token/Sawsbuck.SV11W.7.57740.jpeg",
-    "card": "SV11W 007 Sawsbuck"
+    "card": "SV11W 007 Sawsbuck",
+    "rarity": "U",
+    "rare": true
   },
   {
     "id": 2,
@@ -21,7 +25,9 @@
     "set": "SV11W",
     "number": 11,
     "src": "/cards/wf-token/Tepig.SV11W.11.57197.jpeg",
-    "card": "SV11W 011 Tepig"
+    "card": "SV11W 011 Tepig",
+    "rarity": "C",
+    "rare": false
   },
   {
     "id": 3,
@@ -29,7 +35,9 @@
     "set": "SV11W",
     "number": 12,
     "src": "/cards/wf-token/Pignite.SV11W.12.57198.jpeg",
-    "card": "SV11W 012 Pignite"
+    "card": "SV11W 012 Pignite",
+    "rarity": "C",
+    "rare": false
   },
   {
     "id": 4,
@@ -37,7 +45,9 @@
     "set": "SV11W",
     "number": 19,
     "src": "/cards/wf-token/Dewott.SV11W.19.57204.jpeg",
-    "card": "SV11W 019 Dewott"
+    "card": "SV11W 019 Dewott",
+    "rarity": "C",
+    "rare": false
   },
   {
     "id": 5,
@@ -45,7 +55,9 @@
     "set": "SV11W",
     "number": 21,
     "src": "/cards/wf-token/Basculin.SV11W.21.57747.jpeg",
-    "card": "SV11W 021 Basculin"
+    "card": "SV11W 021 Basculin",
+    "rarity": "C",
+    "rare": false
   },
   {
     "id": 6,
@@ -53,7 +65,9 @@
     "set": "SV11W",
     "number": 23,
     "src": "/cards/wf-token/Swanna.SV11W.23.57749.jpeg",
-    "card": "SV11W 023 Swanna"
+    "card": "SV11W 023 Swanna",
+    "rarity": "U",
+    "rare": true
   },
   {
     "id": 7,
@@ -61,7 +75,9 @@
     "set": "SV11W",
     "number": 28,
     "src": "/cards/wf-token/Blitzle.SV11W.28.57754.jpeg",
-    "card": "SV11W 028 Blitzle"
+    "card": "SV11W 028 Blitzle",
+    "rarity": "C",
+    "rare": false
   },
   {
     "id": 8,
@@ -69,7 +85,9 @@
     "set": "SV11W",
     "number": 36,
     "src": "/cards/wf-token/Yamask.SV11W.36.57760.jpeg",
-    "card": "SV11W 036 Yamask"
+    "card": "SV11W 036 Yamask",
+    "rarity": "C",
+    "rare": false
   },
   {
     "id": 9,
@@ -77,7 +95,9 @@
     "set": "SV11W",
     "number": 38,
     "src": "/cards/wf-token/Gothita.SV11W.38.57762.jpeg",
-    "card": "SV11W 038 Gothita"
+    "card": "SV11W 038 Gothita",
+    "rarity": "C",
+    "rare": false
   },
   {
     "id": 10,
@@ -85,7 +105,9 @@
     "set": "SV11W",
     "number": 40,
     "src": "/cards/wf-token/Gothitelle.SV11W.40.57764.jpeg",
-    "card": "SV11W 040 Gothitelle"
+    "card": "SV11W 040 Gothitelle",
+    "rarity": "R",
+    "rare": true
   },
   {
     "id": 11,
@@ -93,7 +115,9 @@
     "set": "SV11W",
     "number": 45,
     "src": "/cards/wf-token/Gigalith.SV11W.45.57767.jpeg",
-    "card": "SV11W 045 Gigalith"
+    "card": "SV11W 045 Gigalith",
+    "rarity": "U",
+    "rare": true
   },
   {
     "id": 12,
@@ -101,7 +125,9 @@
     "set": "SV11W",
     "number": 49,
     "src": "/cards/wf-token/Mienfoo.SV11W.49.57771.jpeg",
-    "card": "SV11W 049 Mienfoo"
+    "card": "SV11W 049 Mienfoo",
+    "rarity": "C",
+    "rare": false
   },
   {
     "id": 13,
@@ -109,7 +135,9 @@
     "set": "SV11W",
     "number": 55,
     "src": "/cards/wf-token/Scrafty.SV11W.55.57777.jpeg",
-    "card": "SV11W 055 Scrafty"
+    "card": "SV11W 055 Scrafty",
+    "rarity": "U",
+    "rare": true
   },
   {
     "id": 14,
@@ -117,7 +145,9 @@
     "set": "SV11W",
     "number": 58,
     "src": "/cards/wf-token/Zorua.SV11W.58.57246.jpeg",
-    "card": "SV11W 058 Zorua"
+    "card": "SV11W 058 Zorua",
+    "rarity": "C",
+    "rare": false
   },
   {
     "id": 15,
@@ -125,7 +155,9 @@
     "set": "SV11W",
     "number": 63,
     "src": "/cards/wf-token/Ferroseed.SV11W.63.57783.jpeg",
-    "card": "SV11W 063 Ferroseed"
+    "card": "SV11W 063 Ferroseed",
+    "rarity": "C",
+    "rare": false
   },
   {
     "id": 16,
@@ -133,7 +165,9 @@
     "set": "SV11W",
     "number": 64,
     "src": "/cards/wf-token/Ferrothorn.SV11W.64.57784.jpeg",
-    "card": "SV11W 064 Ferrothorn"
+    "card": "SV11W 064 Ferrothorn",
+    "rarity": "U",
+    "rare": true
   },
   {
     "id": 17,
@@ -141,7 +175,9 @@
     "set": "SV11W",
     "number": 66,
     "src": "/cards/wf-token/Klang.SV11W.66.57786.jpeg",
-    "card": "SV11W 066 Klang"
+    "card": "SV11W 066 Klang",
+    "rarity": "C",
+    "rare": false
   },
   {
     "id": 18,
@@ -149,7 +185,9 @@
     "set": "SV11W",
     "number": 68,
     "src": "/cards/wf-token/Durant.SV11W.68.57788.jpeg",
-    "card": "SV11W 068 Durant"
+    "card": "SV11W 068 Durant",
+    "rarity": "U",
+    "rare": true
   },
   {
     "id": 19,
@@ -157,7 +195,9 @@
     "set": "SV11W",
     "number": 70,
     "src": "/cards/wf-token/Patrat.SV11W.70.57790.jpeg",
-    "card": "SV11W 070 Patrat"
+    "card": "SV11W 070 Patrat",
+    "rarity": "C",
+    "rare": false
   },
   {
     "id": 20,
@@ -165,7 +205,9 @@
     "set": "SV11W",
     "number": 73,
     "src": "/cards/wf-token/Herdier.SV11W.73.57195.jpeg",
-    "card": "SV11W 073 Herdier"
+    "card": "SV11W 073 Herdier",
+    "rarity": "C",
+    "rare": false
   },
   {
     "id": 21,
@@ -173,7 +215,9 @@
     "set": "SV11W",
     "number": 81,
     "src": "/cards/wf-token/Antique-Plume-Fossil.SV11W.81.57797.jpeg",
-    "card": "SV11W 081 Antique Plume Fossil"
+    "card": "SV11W 081 Antique Plume Fossil",
+    "rarity": "C",
+    "rare": false
   },
   {
     "id": 22,
@@ -181,6 +225,8 @@
     "set": "SV11W",
     "number": 83,
     "src": "/cards/wf-token/Harlequin.SV11W.83.57799.jpeg",
-    "card": "SV11W 083 Harlequin"
+    "card": "SV11W 083 Harlequin",
+    "rarity": "U",
+    "rare": true
   }
 ]
